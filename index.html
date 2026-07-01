@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Edit Teks di Gambar</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
 <style>
   :root{
     --ink:#1c1b19;
@@ -25,11 +26,7 @@
   }
   .wrap{max-width:880px;margin:0 auto;}
   header{margin-bottom:18px;}
-  h1{
-    font-size:22px;
-    margin:0 0 4px;
-    letter-spacing:-0.01em;
-  }
+  h1{font-size:22px;margin:0 0 4px;letter-spacing:-0.01em;}
   .sub{color:var(--muted);font-size:14px;line-height:1.5;margin:0;}
 
   .panel{
@@ -53,6 +50,28 @@
   .drop strong{color:var(--ink);}
   input[type=file]{display:none;}
 
+  .modeToggle{
+    display:flex;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:3px;
+    margin-bottom:12px;
+    gap:3px;
+  }
+  .modeToggle button{
+    flex:1;
+    border:none;
+    background:transparent;
+    padding:9px 8px;
+    border-radius:7px;
+    font-size:13px;
+    font-weight:700;
+    color:var(--muted);
+    cursor:pointer;
+  }
+  .modeToggle button.active{background:var(--accent);color:#fff;}
+
   .toolbar{
     display:flex;
     flex-wrap:wrap;
@@ -75,11 +94,17 @@
   .btn.ghost{background:transparent;}
   .btn:disabled{opacity:.4;cursor:not-allowed;}
 
-  .hint{
-    font-size:12.5px;
-    color:var(--muted);
-    margin:0 0 10px;
+  .hint{font-size:12.5px;color:var(--muted);margin:0 0 10px;}
+
+  .progressWrap{display:none;margin-bottom:12px;}
+  .progressWrap.show{display:block;}
+  .progressBar{
+    height:8px;background:#eee2d5;border-radius:99px;overflow:hidden;margin-top:6px;
   }
+  .progressFill{
+    height:100%;background:var(--accent);width:0%;transition:width .2s;
+  }
+  .progressLabel{font-size:12.5px;color:var(--muted);}
 
   .stage{
     position:relative;
@@ -108,49 +133,29 @@
   }
   .edit-card.show{display:block;}
   .edit-card label{
-    display:block;
-    font-size:12px;
-    font-weight:700;
-    color:var(--accent);
-    text-transform:uppercase;
-    letter-spacing:.04em;
-    margin-bottom:6px;
+    display:block;font-size:12px;font-weight:700;color:var(--accent);
+    text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;
   }
   .edit-card input[type=text]{
-    width:100%;
-    padding:10px 12px;
-    font-size:15px;
-    border-radius:8px;
-    border:1px solid var(--line);
-    margin-bottom:10px;
-    font-family:inherit;
+    width:100%;padding:10px 12px;font-size:15px;border-radius:8px;
+    border:1px solid var(--line);margin-bottom:10px;font-family:inherit;
   }
   .row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
   .field{flex:1;min-width:110px;}
   .field label{margin-bottom:4px;}
   .field input[type=range]{width:100%;}
-  .field input[type=color]{
-    width:100%;height:34px;border:1px solid var(--line);border-radius:8px;padding:2px;background:#fff;
-  }
+  .field input[type=color]{width:100%;height:34px;border:1px solid var(--line);border-radius:8px;padding:2px;background:#fff;}
   .valdisp{font-size:12px;color:var(--muted);}
   .actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
 
-  .steps{
-    display:flex;
-    gap:8px;
-    margin-bottom:14px;
-    font-size:12.5px;
-    color:var(--muted);
+  .steps{display:flex;gap:8px;margin-bottom:14px;font-size:12.5px;color:var(--muted);}
+  .step{flex:1;padding:8px 10px;border-radius:8px;background:#fff;border:1px solid var(--line);text-align:center;}
+  .step.active{border-color:var(--accent);color:var(--accent);font-weight:700;background:#fbf1ea;}
+
+  .badge{
+    display:inline-block;font-size:11.5px;font-weight:700;color:var(--accent);
+    background:#fbf1ea;border:1px solid #ecd9c9;border-radius:99px;padding:2px 9px;margin-left:6px;
   }
-  .step{
-    flex:1;
-    padding:8px 10px;
-    border-radius:8px;
-    background:#fff;
-    border:1px solid var(--line);
-    text-align:center;
-  }
-  .step.active{border-color:var(--accent); color:var(--accent); font-weight:700; background:#fbf1ea;}
 
   footer{text-align:center;color:var(--muted);font-size:12px;margin-top:22px;}
 </style>
@@ -159,12 +164,12 @@
 <div class="wrap">
   <header>
     <h1>Edit Teks di Gambar</h1>
-    <p class="sub">Upload gambar, tarik kotak di bagian teks yang mau diganti, ketik teks barunya. Bagian lain di gambar tidak ikut berubah.</p>
+    <p class="sub">Upload gambar, biar sistem otomatis mengelompokkan tiap teks jadi kotak sendiri-sendiri. Tap salah satu kotak, ganti teksnya, selesai.</p>
   </header>
 
   <div class="steps">
     <div class="step active" id="step1">1. Upload gambar</div>
-    <div class="step" id="step2">2. Pilih area teks</div>
+    <div class="step" id="step2">2. Pilih teks</div>
     <div class="step" id="step3">3. Simpan hasil</div>
   </div>
 
@@ -176,12 +181,24 @@
   </div>
 
   <div class="panel" id="editorPanel" style="display:none;">
+    <div class="modeToggle">
+      <button id="modeAuto" class="active">Otomatis (deteksi teks)</button>
+      <button id="modeManual">Manual (gambar kotak)</button>
+    </div>
+
     <div class="toolbar">
       <button class="btn ghost" id="newImageBtn">Ganti gambar</button>
+      <button class="btn ghost" id="rescanBtn">Deteksi ulang</button>
       <button class="btn ghost" id="undoBtn" disabled>Undo</button>
       <button class="btn primary" id="downloadBtn" disabled>Download hasil</button>
     </div>
-    <p class="hint">Tarik kotak (klik-tahan-geser) di atas teks yang mau kamu ganti.</p>
+
+    <div class="progressWrap" id="progressWrap">
+      <div class="progressLabel" id="progressLabel">Mendeteksi teks...</div>
+      <div class="progressBar"><div class="progressFill" id="progressFill"></div></div>
+    </div>
+
+    <p class="hint" id="modeHint">Sedang mendeteksi teks di gambar kamu — setiap teks yang ketemu akan dikotakin otomatis. Tap salah satu kotak buat mengganti teksnya. <span class="badge" id="detectedCount"></span></p>
 
     <div class="stage">
       <canvas id="canvas"></canvas>
@@ -190,7 +207,7 @@
     <div class="edit-card" id="editCard">
       <label>Teks pengganti</label>
       <input type="text" id="newTextInput" placeholder="Contoh: 13 Pro Max">
-      <p class="hint" style="margin-top:-4px;">Ukuran, warna, tebal, dan perataan di bawah ini sudah dideteksi otomatis dari gambar. Ubah cuma kalau hasilnya kurang pas.</p>
+      <p class="hint" style="margin-top:-4px;">Ukuran, warna, tebal, dan perataan sudah dideteksi otomatis dari gambar. Ubah cuma kalau kurang pas.</p>
 
       <div class="row">
         <div class="field">
@@ -212,8 +229,8 @@
           <label>Perataan</label>
           <select id="alignSel" class="btn" style="width:100%;">
             <option value="left">Kiri</option>
-            <option value="right" selected>Kanan</option>
-            <option value="center">Tengah</option>
+            <option value="right">Kanan</option>
+            <option value="center" selected>Tengah</option>
           </select>
         </div>
         <div class="field" style="display:flex;align-items:flex-end;">
@@ -230,7 +247,7 @@
     </div>
   </div>
 
-  <footer>Semua proses dilakukan langsung di browser kamu — gambar tidak diunggah ke server manapun.</footer>
+  <footer>Semua proses (termasuk deteksi teks) berjalan langsung di browser kamu — gambar tidak diunggah ke server manapun.</footer>
 </div>
 
 <script>
@@ -254,16 +271,25 @@
   const undoBtn = document.getElementById('undoBtn');
   const downloadBtn = document.getElementById('downloadBtn');
   const newImageBtn = document.getElementById('newImageBtn');
+  const rescanBtn = document.getElementById('rescanBtn');
+  const modeAuto = document.getElementById('modeAuto');
+  const modeManual = document.getElementById('modeManual');
+  const modeHint = document.getElementById('modeHint');
+  const progressWrap = document.getElementById('progressWrap');
+  const progressFill = document.getElementById('progressFill');
+  const progressLabel = document.getElementById('progressLabel');
+  const detectedCount = document.getElementById('detectedCount');
   const step1 = document.getElementById('step1');
   const step2 = document.getElementById('step2');
   const step3 = document.getElementById('step3');
 
   let img = new Image();
   let history = [];
-  let currentBox = null; // {x,y,w,h} in canvas pixel coords
+  let currentBox = null;
   let dragging = false;
-  let startX=0, startY=0;
-  let scaleFactor = 1;
+  let startX=0, startY=0, downX=0, downY=0;
+  let mode = 'auto'; // 'auto' | 'manual'
+  let detectedBoxes = []; // {x,y,w,h,text}
 
   function loadFile(file){
     if(!file || !file.type.startsWith('image/')) return;
@@ -276,6 +302,7 @@
         editorPanel.style.display = 'block';
         step1.classList.remove('active');
         step2.classList.add('active');
+        if(mode === 'auto') runDetection();
       };
       img.src = e.target.result;
     };
@@ -289,6 +316,7 @@
     history = [ctx.getImageData(0,0,canvas.width,canvas.height)];
     undoBtn.disabled = true;
     downloadBtn.disabled = false;
+    detectedBoxes = [];
   }
 
   drop.addEventListener('click', () => fileInput.click());
@@ -307,6 +335,101 @@
     fileInput.value = '';
   });
 
+  modeAuto.addEventListener('click', () => setMode('auto'));
+  modeManual.addEventListener('click', () => setMode('manual'));
+
+  function setMode(m){
+    mode = m;
+    modeAuto.classList.toggle('active', m==='auto');
+    modeManual.classList.toggle('active', m==='manual');
+    editCard.classList.remove('show');
+    currentBox = null;
+    if(m === 'auto'){
+      modeHint.innerHTML = detectedBoxes.length
+        ? `Tap salah satu kotak untuk mengganti teksnya. <span class="badge">${detectedBoxes.length} teks terdeteksi</span>`
+        : 'Belum ada deteksi. Klik "Deteksi ulang" untuk mendeteksi teks di gambar ini.';
+      drawOverlays();
+    } else {
+      modeHint.textContent = 'Tarik kotak (klik-tahan-geser) di atas teks yang mau kamu ganti.';
+      redrawBase();
+    }
+  }
+
+  rescanBtn.addEventListener('click', () => { if(mode!=='auto') setMode('auto'); runDetection(); });
+
+  async function runDetection(){
+    if(typeof Tesseract === 'undefined'){
+      modeHint.textContent = 'Deteksi otomatis gagal dimuat (koneksi internet diperlukan untuk fitur ini). Coba mode Manual di bawah.';
+      return;
+    }
+    progressWrap.classList.add('show');
+    detectedCount.textContent = '';
+    redrawBase();
+    detectedBoxes = [];
+    try{
+      const worker = await Tesseract.createWorker('eng', 1, {
+        logger: m => {
+          if(m.status){
+            progressLabel.textContent = statusLabel(m.status);
+            if(typeof m.progress === 'number'){
+              progressFill.style.width = Math.round(m.progress*100) + '%';
+            }
+          }
+        }
+      });
+      const { data } = await worker.recognize(canvas);
+      await worker.terminate();
+
+      const lines = (data.lines || []).filter(l => l.text && l.text.trim().length > 0 && (l.confidence===undefined || l.confidence > 35));
+      detectedBoxes = lines.map(l => ({
+        x: l.bbox.x0,
+        y: l.bbox.y0,
+        w: l.bbox.x1 - l.bbox.x0,
+        h: l.bbox.y1 - l.bbox.y0,
+        text: l.text.trim()
+      })).filter(b => b.w > 4 && b.h > 4);
+
+      progressWrap.classList.remove('show');
+      modeHint.innerHTML = detectedBoxes.length
+        ? `Tap salah satu kotak untuk mengganti teksnya. <span class="badge">${detectedBoxes.length} teks terdeteksi</span>`
+        : 'Tidak ada teks yang terdeteksi. Coba mode Manual untuk memilih area sendiri.';
+      drawOverlays();
+    } catch(err){
+      progressWrap.classList.remove('show');
+      modeHint.textContent = 'Deteksi otomatis gagal. Coba mode Manual di bawah untuk memilih area teks sendiri.';
+      console.error(err);
+    }
+  }
+
+  function statusLabel(s){
+    const map = {
+      'loading tesseract core':'Menyiapkan mesin OCR...',
+      'initializing tesseract':'Menyiapkan mesin OCR...',
+      'loading language traineddata':'Memuat data bahasa...',
+      'initializing api':'Menyiapkan...',
+      'recognizing text':'Mendeteksi teks...'
+    };
+    return map[s] || s;
+  }
+
+  function redrawBase(){
+    ctx.putImageData(history[history.length-1], 0, 0);
+  }
+
+  function drawOverlays(){
+    redrawBase();
+    if(mode !== 'auto') return;
+    ctx.save();
+    detectedBoxes.forEach(b => {
+      ctx.fillStyle = 'rgba(198,93,46,0.16)';
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.strokeStyle = 'rgba(198,93,46,0.85)';
+      ctx.lineWidth = Math.max(1.5, canvas.width*0.0015);
+      ctx.strokeRect(b.x, b.y, b.w, b.h);
+    });
+    ctx.restore();
+  }
+
   function getPos(e){
     const rect = canvas.getBoundingClientRect();
     const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
@@ -316,26 +439,35 @@
     return { x: cx*sx, y: cy*sy };
   }
 
-  function redrawBase(){
-    ctx.putImageData(history[history.length-1], 0, 0);
+  function hitTest(px, py){
+    let best = null;
+    for(const b of detectedBoxes){
+      if(px >= b.x && px <= b.x+b.w && py >= b.y && py <= b.y+b.h){
+        if(!best || (b.w*b.h) < (best.w*best.h)) best = b;
+      }
+    }
+    return best;
   }
 
   function onDown(e){
     e.preventDefault();
     const p = getPos(e);
+    downX = p.x; downY = p.y;
+    if(mode === 'auto'){
+      dragging = false;
+      return;
+    }
     dragging = true;
     startX = p.x; startY = p.y;
     currentBox = {x:p.x,y:p.y,w:0,h:0};
   }
   function onMove(e){
-    if(!dragging) return;
+    if(mode !== 'manual' || !dragging) return;
     e.preventDefault();
     const p = getPos(e);
     currentBox = {
-      x: Math.min(startX,p.x),
-      y: Math.min(startY,p.y),
-      w: Math.abs(p.x-startX),
-      h: Math.abs(p.y-startY)
+      x: Math.min(startX,p.x), y: Math.min(startY,p.y),
+      w: Math.abs(p.x-startX), h: Math.abs(p.y-startY)
     };
     redrawBase();
     ctx.save();
@@ -346,6 +478,18 @@
     ctx.restore();
   }
   function onUp(e){
+    const p = getPos(e);
+    if(mode === 'auto'){
+      const dist = Math.hypot(p.x-downX, p.y-downY);
+      if(dist < 8){
+        const hit = hitTest(p.x, p.y);
+        if(hit){
+          currentBox = hit;
+          openEditCard(hit.text);
+        }
+      }
+      return;
+    }
     if(!dragging) return;
     dragging = false;
     if(currentBox.w < 6 || currentBox.h < 6){
@@ -353,7 +497,7 @@
       currentBox = null;
       return;
     }
-    openEditCard();
+    openEditCard('');
   }
 
   canvas.addEventListener('mousedown', onDown);
@@ -367,8 +511,6 @@
     return '#' + c.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
   }
 
-  // Menganalisa area yang dipilih untuk menebak: warna background,
-  // warna teks, apakah tebal (bold), dan perataan teks aslinya.
   function analyzeBox(box){
     const x0 = Math.max(0, Math.round(box.x));
     const y0 = Math.max(0, Math.round(box.y));
@@ -376,7 +518,6 @@
     const h = Math.max(1, Math.round(box.h));
     const data = ctx.getImageData(x0, y0, w, h).data;
 
-    // Kelompokkan warna (quantize) lalu hitung frekuensinya
     const counts = new Map();
     for(let i=0; i<data.length; i+=4){
       const r = Math.round(data[i]/12)*12;
@@ -388,25 +529,23 @@
     const sorted = [...counts.entries()].sort((a,b)=>b[1]-a[1]);
     const bg = sorted[0][0].split(',').map(Number);
 
-    let textColor = null;
+    let tColor = null;
     for(const [key] of sorted.slice(1)){
       const c = key.split(',').map(Number);
       const dist = Math.hypot(c[0]-bg[0], c[1]-bg[1], c[2]-bg[2]);
-      if(dist > 45){ textColor = c; break; }
+      if(dist > 45){ tColor = c; break; }
     }
-    if(!textColor){
-      // fallback: kontraskan dari background
+    if(!tColor){
       const lum = 0.299*bg[0]+0.587*bg[1]+0.114*bg[2];
-      textColor = lum > 128 ? [90,90,90] : [225,225,225];
+      tColor = lum > 128 ? [90,90,90] : [225,225,225];
     }
 
-    // Cari sebaran horizontal piksel yang mirip warna teks, buat nebak perataan & density (bold/tidak)
     let minCol = w, maxCol = 0, textPixelCount = 0;
     for(let yy=0; yy<h; yy++){
       for(let xx=0; xx<w; xx++){
         const idx = (yy*w+xx)*4;
         const r = data[idx], g = data[idx+1], b = data[idx+2];
-        const dText = Math.hypot(r-textColor[0], g-textColor[1], b-textColor[2]);
+        const dText = Math.hypot(r-tColor[0], g-tColor[1], b-tColor[2]);
         const dBg = Math.hypot(r-bg[0], g-bg[1], b-bg[2]);
         if(dText < dBg && dText < 70){
           if(xx < minCol) minCol = xx;
@@ -427,24 +566,22 @@
     const density = textPixelCount / (w*h);
     const bold = density > 0.16;
 
-    return { bg, textColor, align, bold };
+    return { bg, textColor: tColor, align, bold };
   }
 
-  let lastAnalysis = null;
-
-  function openEditCard(){
+  function openEditCard(prefillText){
     editCard.classList.add('show');
-    newTextInput.value = '';
+    newTextInput.value = prefillText || '';
 
-    lastAnalysis = analyzeBox(currentBox);
-    bgColor.value = rgbToHex(lastAnalysis.bg);
-    textColor.value = rgbToHex(lastAnalysis.textColor);
-    alignSel.value = lastAnalysis.align;
-    boldChk.checked = lastAnalysis.bold;
+    const analysis = analyzeBox(currentBox);
+    bgColor.value = rgbToHex(analysis.bg);
+    textColor.value = rgbToHex(analysis.textColor);
+    alignSel.value = analysis.align;
+    boldChk.checked = analysis.bold;
 
     fontSize.value = Math.max(8, Math.round(currentBox.h * 0.68));
     fontSizeVal.textContent = fontSize.value;
-    setTimeout(()=>newTextInput.focus(), 50);
+    setTimeout(()=>{ newTextInput.focus(); newTextInput.select(); }, 50);
     editCard.scrollIntoView({behavior:'smooth', block:'nearest'});
   }
 
@@ -452,19 +589,17 @@
 
   cancelEdit.addEventListener('click', () => {
     editCard.classList.remove('show');
-    redrawBase();
+    drawOverlays();
     currentBox = null;
   });
 
   applyEdit.addEventListener('click', () => {
     if(!currentBox) return;
     redrawBase();
-    // fill box with bg color
     ctx.save();
     ctx.fillStyle = bgColor.value;
     ctx.fillRect(currentBox.x, currentBox.y, currentBox.w, currentBox.h);
 
-    // draw new text
     const text = newTextInput.value.trim();
     if(text){
       let size = parseInt(fontSize.value,10);
@@ -474,7 +609,6 @@
       ctx.textAlign = align;
       const weight = boldChk.checked ? '700' : '500';
 
-      // shrink font to fit width if needed
       ctx.font = `${weight} ${size}px -apple-system, Roboto, sans-serif`;
       while(ctx.measureText(text).width > currentBox.w - 4 && size > 6){
         size -= 1;
@@ -493,25 +627,38 @@
 
     history.push(ctx.getImageData(0,0,canvas.width,canvas.height));
     undoBtn.disabled = false;
+
+    // remove this box from detected list since it's already edited
+    detectedBoxes = detectedBoxes.filter(b => b !== currentBox);
+    detectedCount.textContent = detectedBoxes.length ? `${detectedBoxes.length} teks terdeteksi` : '';
+    if(mode === 'auto'){
+      modeHint.innerHTML = detectedBoxes.length
+        ? `Tap salah satu kotak untuk mengganti teksnya. <span class="badge">${detectedBoxes.length} teks terdeteksi</span>`
+        : 'Semua teks yang terdeteksi sudah diedit. Klik "Deteksi ulang" kalau masih ada yang mau diganti.';
+    }
+
     editCard.classList.remove('show');
     currentBox = null;
     step2.classList.remove('active');
     step3.classList.add('active');
+    drawOverlays();
   });
 
   undoBtn.addEventListener('click', () => {
     if(history.length > 1){
       history.pop();
-      redrawBase();
       if(history.length <= 1) undoBtn.disabled = true;
+      drawOverlays();
     }
   });
 
   downloadBtn.addEventListener('click', () => {
+    redrawBase(); // make sure overlays aren't baked into export
     const link = document.createElement('a');
     link.download = 'gambar-edit.png';
     link.href = canvas.toDataURL('image/png');
     link.click();
+    drawOverlays();
   });
 })();
 </script>

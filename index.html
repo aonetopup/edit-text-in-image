@@ -124,6 +124,17 @@
     pointer-events:none;
   }
 
+  .detect-box{
+    position:absolute; border:1.5px dashed rgba(95,168,255,.85); background:rgba(95,168,255,.10);
+    cursor:pointer; border-radius:3px; transition:background .12s, border-color .12s;
+  }
+  .detect-box:hover{ background:rgba(95,168,255,.28); border-color:#8fc0ff; }
+  .detect-badge{
+    position:absolute; top:-9px; right:-9px; width:18px; height:18px; border-radius:50%;
+    background:var(--accent); color:#0E1116; font-size:11px; line-height:18px; text-align:center;
+    box-shadow:0 0 0 2px var(--bg); pointer-events:none;
+  }
+
   /* ---------- Properties panel ---------- */
   .properties{
     width:260px; flex:none; background:var(--panel);
@@ -209,7 +220,7 @@
     <button class="btn" id="resetBtn" disabled>Mulai Ulang</button>
     <button class="btn primary" id="autoBtn" disabled>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3"/></svg>
-      Deteksi &amp; Ganti Otomatis
+      Pindai Ulang Teks
     </button>
     <button class="btn" id="downloadBtn" disabled>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12M12 16l-4-4M12 16l4-4"/><path d="M4 20h16"/></svg>
@@ -237,7 +248,7 @@
       <div class="empty-state" id="emptyState">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="8" cy="9" r="1.5"/></svg>
         <h2>Edit teks di dalam foto</h2>
-        <p>Unggah gambar, lalu klik <b style="color:var(--text)">Deteksi &amp; Ganti Otomatis</b> — teks lama akan terhapus dan digantikan lapisan teks baru yang otomatis mengikuti warna, ukuran, ketebalan, dan transparansi aslinya. Atau edit manual dengan alat <b style="color:var(--text)">Hapus</b> &amp; <b style="color:var(--text)">Teks</b>.</p>
+        <p>Unggah gambar — teks otomatis terdeteksi dan ditandai kotak biru putus-putus. Klik kotak yang ingin diubah: <b style="color:var(--text)">hanya bagian itu</b> yang terhapus & tergantikan, mengikuti ukuran, warna, ketebalan, dan transparansi aslinya. Bagian lain tetap utuh.</p>
         <div class="drop-hint">seret &amp; lepas gambar di sini, atau klik "Buka Gambar"</div>
       </div>
       <div class="canvas-outer" id="canvasOuter" style="display:none;">
@@ -254,7 +265,7 @@
 
     <div class="properties" id="properties">
       <div id="propsBody">
-        <p class="empty-props">Pilih alat <b>Teks</b> lalu klik pada gambar untuk menambahkan teks baru.<br><br>Pilih alat <b>Hapus</b> untuk menyeret kotak di atas teks lama pada foto — area tersebut akan dihaluskan agar teks lama hilang.</p>
+        <p class="empty-props">Klik kotak biru putus-putus pada gambar untuk mengedit teks yang terdeteksi di situ saja.<br><br>Atau pilih alat <b>Teks</b> untuk menambah teks baru, atau alat <b>Hapus</b> untuk menghapus area manual.</p>
       </div>
       <div>
         <p class="panel-title">Lapisan teks</p>
@@ -287,8 +298,10 @@
   let tool = 'select';
   let fitScale = 1;
   let textEls = []; // {id, x,y,w, text, fontSize, fontFamily, color, bold, italic, align, rotation, opacity}
+  let detectedRegions = []; // {id, x,y,w,h,text,style,node,activated}
   let selectedId = null;
   let idCounter = 1;
+  let regionIdCounter = 1;
   let hasImage = false;
 
   const FONTS = ['Inter','Space Grotesk','JetBrains Mono','Georgia','Arial','Impact','Times New Roman'];
@@ -351,9 +364,12 @@
       resetBtn.disabled = false;
       downloadBtn.disabled = false;
       autoBtn.disabled = false;
-      textEls = []; selectedId=null; renderLayers(); renderProps();
+      textEls = []; selectedId=null;
+      clearDetections();
+      renderLayers(); renderProps();
       fitCanvas();
       URL.revokeObjectURL(url);
+      runAutoDetection();
     };
     img.src = url;
   }
@@ -377,6 +393,7 @@
     canvasOuter.style.display='none';
     hasImage=false; textEls=[]; selectedId=null;
     document.querySelectorAll('.text-el').forEach(n=>n.remove());
+    clearDetections();
     fileName.textContent='Belum ada gambar';
     resetBtn.disabled=true; downloadBtn.disabled=true; autoBtn.disabled=true;
     renderLayers(); renderProps();
@@ -524,17 +541,23 @@
     } else {
       color = '#FFFFFF'; opacity = 1; fillRatio = 0.25;
     }
-    const fontSize = Math.max(8, Math.round(h*0.82));
-    const bold = fillRatio > 0.30;
+    const fontSize = Math.max(8, Math.round(h*0.92));
+    const bold = fillRatio > 0.28;
     return { color, opacity, fontSize, bold };
   }
 
-  async function autoDetectAndReplace(){
+  function clearDetections(){
+    detectedRegions.forEach(r=>{ if(r.node) r.node.remove(); });
+    detectedRegions = [];
+  }
+
+  async function runAutoDetection(){
     if(!hasImage) return;
     if(typeof Tesseract === 'undefined'){
       alert('Modul OCR gagal dimuat. Pastikan perangkat terhubung ke internet, lalu coba lagi.');
       return;
     }
+    clearDetections();
     scanOverlay.classList.remove('hidden');
     scanStatus.textContent = 'Menyiapkan mesin OCR…';
     scanBarFill.style.width = '0%';
@@ -547,14 +570,10 @@
         }
       });
       const lines = (data.lines||[]).filter(l=> l.words && l.words.length && l.text && l.text.trim().length>0);
-      if(!lines.length){
-        alert('Tidak ada teks yang terdeteksi pada gambar ini. Coba gunakan alat Hapus dan Teks secara manual.');
-        return;
-      }
       // Pisahkan tiap baris menjadi "kolom" berdasarkan jarak antar kata —
       // jarak yang lebar (seperti antara label dan nilai/nomor di sampingnya)
-      // dianggap batas kolom baru, supaya label & nilai jadi lapisan terpisah
-      // dan bisa diedit sendiri-sendiri tanpa mengganggu yang lain.
+      // dianggap batas kolom baru, supaya label & nilai jadi kotak terpisah
+      // dan bisa diklik/diedit sendiri-sendiri tanpa mengganggu yang lain.
       const rawJobs = [];
       lines.forEach(line=>{
         const words = line.words.filter(w=>w.text && w.text.trim().length>0 && w.confidence>25);
@@ -580,29 +599,15 @@
         });
       });
       if(!rawJobs.length){
-        alert('Tidak ada teks yang terdeteksi pada gambar ini. Coba gunakan alat Hapus dan Teks secara manual.');
+        alert('Tidak ada teks yang terdeteksi pada gambar ini. Anda tetap bisa memakai alat Hapus dan Teks secara manual.');
         return;
       }
-      // Analisis gaya tiap kolom DULU (sebelum area dihapus, supaya sampling warna/ukuran akurat)
-      const jobs = rawJobs.map(j=> ({ ...j, style: analyzeRegionStyle(j.x, j.y, j.w, j.h) }));
-      // Baru hapus semua area teks lama
-      jobs.forEach(j=> eraseRegion(j.x, j.y, j.w, j.h));
-      // Lalu buat lapisan teks baru per kolom, otomatis meniru ukuran, warna & ketebalan aslinya
-      let firstId = null;
-      jobs.forEach(j=>{
-        const el = {
-          id: idCounter++, x: j.x, y: j.y, w: Math.max(j.w+10, 30),
-          text: j.text, fontSize: j.style.fontSize, fontFamily: defaultFont,
-          color: j.style.color, bold: j.style.bold, italic:false,
-          align:'left', rotation:0, opacity: j.style.opacity
-        };
-        textEls.push(el);
-        buildTextNode(el);
-        if(firstId===null) firstId = el.id;
+      // Analisis gaya (warna, ukuran, ketebalan, transparansi) tiap kotak dari gambar ASLI
+      // (belum ada yang dihapus), supaya sampling akurat dan tersimpan menempel pada tiap kotak.
+      rawJobs.forEach(j=>{
+        j.style = analyzeRegionStyle(j.x, j.y, j.w, j.h);
+        buildDetectBox(j);
       });
-      renderLayers();
-      document.querySelector('.tool-btn[data-tool="select"]').click();
-      if(firstId!==null) selectEl(firstId);
     } catch(err){
       console.error(err);
       alert('Terjadi kesalahan saat mendeteksi teks. Coba lagi, atau gunakan alat manual.');
@@ -610,6 +615,57 @@
       scanOverlay.classList.add('hidden');
       autoBtn.disabled = false;
     }
+  }
+
+  function buildDetectBox(j){
+    const region = {
+      id: regionIdCounter++, x:j.x, y:j.y, w:j.w, h:j.h,
+      text:j.text, style:j.style, node:null, activated:false
+    };
+    const node = document.createElement('div');
+    node.className = 'detect-box';
+    node.style.left = (region.x-3)+'px';
+    node.style.top = (region.y-3)+'px';
+    node.style.width = (region.w+6)+'px';
+    node.style.height = (region.h+6)+'px';
+    node.title = 'Klik untuk edit: "' + region.text + '"';
+    const badge = document.createElement('div');
+    badge.className = 'detect-badge';
+    badge.textContent = '✎';
+    node.appendChild(badge);
+    node.addEventListener('click', e=>{
+      e.stopPropagation();
+      activateRegion(region.id);
+    });
+    canvasWrap.appendChild(node);
+    region.node = node;
+    detectedRegions.push(region);
+  }
+
+  function activateRegion(id){
+    const region = detectedRegions.find(r=>r.id===id);
+    if(!region || region.activated) return;
+    region.activated = true;
+    if(region.node){ region.node.remove(); region.node = null; }
+
+    // Hapus teks lama HANYA di kotak ini, lalu buat lapisan teks baru
+    // yang meniru posisi, ukuran, warna, ketebalan & transparansi aslinya.
+    eraseRegion(region.x, region.y, region.w, region.h);
+    const el = {
+      id: idCounter++, x: region.x, y: region.y, w: Math.max(region.w+10, 30),
+      text: region.text, fontSize: region.style.fontSize, fontFamily: defaultFont,
+      color: region.style.color, bold: region.style.bold, italic:false,
+      align:'left', rotation:0, opacity: region.style.opacity
+    };
+    textEls.push(el);
+    buildTextNode(el);
+    renderLayers();
+    document.querySelector('.tool-btn[data-tool="select"]').click();
+    selectEl(el.id);
+    setTimeout(()=>{
+      const node = document.getElementById('txt-'+el.id);
+      if(node){ node.classList.add('editing'); node.focus(); document.execCommand('selectAll', false, null); }
+    }, 30);
   }
   function labelStatus(s){
     const map = {
@@ -621,7 +677,7 @@
     };
     return map[s] || s;
   }
-  autoBtn.addEventListener('click', autoDetectAndReplace);
+  autoBtn.addEventListener('click', runAutoDetection);
 
   // ---------- Text elements ----------
   function addTextEl(x,y){
@@ -752,7 +808,7 @@
   function renderProps(){
     const el = selectedId!==null ? getEl(selectedId) : null;
     if(!el){
-      propsBody.innerHTML = `<p class="empty-props">Pilih alat <b>Teks</b> lalu klik pada gambar untuk menambahkan teks baru.<br><br>Pilih alat <b>Hapus</b> untuk menyeret kotak di atas teks lama pada foto — area tersebut akan dihaluskan agar teks lama hilang.</p>`;
+      propsBody.innerHTML = `<p class="empty-props">Klik kotak biru putus-putus pada gambar untuk mengedit teks yang terdeteksi di situ saja.<br><br>Atau pilih alat <b>Teks</b> untuk menambah teks baru, atau alat <b>Hapus</b> untuk menghapus area manual.</p>`;
       return;
     }
     propsBody.innerHTML = `

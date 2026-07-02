@@ -3,663 +3,820 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Edit Teks di Gambar</title>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
+<title>Retex — Edit Teks di Foto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
   :root{
-    --ink:#1c1b19;
-    --paper:#f6f3ee;
-    --line:#d9d3c7;
-    --accent:#c65d2e;
-    --accent-ink:#fff;
-    --panel:#fffdf9;
-    --muted:#8a8378;
+    --bg: #14161B;
+    --panel: #1B1E25;
+    --panel-2: #21242D;
+    --line: #2C2F3A;
+    --text: #ECEAE2;
+    --text-dim: #8B8E9C;
+    --accent: #5FA8FF;
+    --accent-dim: #2E4A73;
+    --warn: #E8A33D;
+    --warn-dim: #4A3A1E;
+    --mono: 'JetBrains Mono', monospace;
+    --display: 'Space Grotesk', sans-serif;
+    --body: 'Inter', sans-serif;
   }
   *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
   body{
-    margin:0;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    background:var(--paper);
-    color:var(--ink);
-    min-height:100vh;
-    padding:20px 14px 60px;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--body);
+    overflow:hidden;
   }
-  .wrap{max-width:880px;margin:0 auto;}
-  header{margin-bottom:18px;}
-  h1{font-size:22px;margin:0 0 4px;letter-spacing:-0.01em;}
-  .sub{color:var(--muted);font-size:14px;line-height:1.5;margin:0;}
+  .app{display:flex;flex-direction:column;height:100vh;}
 
-  .panel{
+  /* ---------- Topbar ---------- */
+  .topbar{
+    height:56px; flex:none;
+    display:flex; align-items:center; gap:16px;
+    padding:0 18px;
     background:var(--panel);
-    border:1px solid var(--line);
-    border-radius:14px;
-    padding:16px;
-    margin-bottom:16px;
+    border-bottom:1px solid var(--line);
   }
-
-  .drop{
-    border:2px dashed var(--line);
-    border-radius:12px;
-    padding:28px 16px;
-    text-align:center;
-    cursor:pointer;
-    transition:border-color .15s, background .15s;
+  .logo{
+    font-family:var(--display); font-weight:700; font-size:18px; letter-spacing:0.02em;
+    display:flex; align-items:center; gap:8px;
   }
-  .drop:hover, .drop.drag{border-color:var(--accent); background:#fbf1ea;}
-  .drop p{margin:0;font-size:14px;color:var(--muted);}
-  .drop strong{color:var(--ink);}
-  input[type=file]{display:none;}
-
-  .modeToggle{
-    display:flex;
-    background:#fff;
-    border:1px solid var(--line);
-    border-radius:10px;
-    padding:3px;
-    margin-bottom:12px;
-    gap:3px;
-  }
-  .modeToggle button{
-    flex:1;
-    border:none;
-    background:transparent;
-    padding:9px 8px;
-    border-radius:7px;
-    font-size:13px;
-    font-weight:700;
-    color:var(--muted);
-    cursor:pointer;
-  }
-  .modeToggle button.active{background:var(--accent);color:#fff;}
-
-  .toolbar{
-    display:flex;
-    flex-wrap:wrap;
-    gap:8px;
-    align-items:center;
-    margin-bottom:10px;
-  }
+  .logo .dot{width:8px;height:8px;border-radius:2px;background:var(--accent);display:inline-block;transform:rotate(45deg);}
+  .topbar .sep{width:1px;height:24px;background:var(--line);}
+  .file-name{font-family:var(--mono); font-size:12px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:220px;}
+  .spacer{flex:1;}
   .btn{
-    border:1px solid var(--line);
-    background:#fff;
-    color:var(--ink);
-    padding:9px 14px;
-    border-radius:9px;
-    font-size:13.5px;
-    cursor:pointer;
-    font-weight:600;
+    appearance:none; border:1px solid var(--line); background:var(--panel-2); color:var(--text);
+    font-family:var(--body); font-size:13px; font-weight:500;
+    padding:8px 14px; border-radius:7px; cursor:pointer;
+    display:inline-flex; align-items:center; gap:7px;
+    transition:border-color .15s, background .15s, transform .05s;
   }
-  .btn:active{transform:scale(0.98);}
-  .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
-  .btn.ghost{background:transparent;}
-  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn:hover{border-color:#3a3e4c; background:#262a34;}
+  .btn:active{transform:translateY(1px);}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#0E1116; font-weight:600;}
+  .btn.primary:hover{background:#77b6ff;}
+  .btn:disabled{opacity:.4; cursor:not-allowed;}
+  .btn svg{width:15px;height:15px;flex:none;}
 
-  .hint{font-size:12.5px;color:var(--muted);margin:0 0 10px;}
+  /* ---------- Workspace ---------- */
+  .workspace{flex:1; display:flex; min-height:0;}
 
-  .progressWrap{display:none;margin-bottom:12px;}
-  .progressWrap.show{display:block;}
-  .progressBar{
-    height:8px;background:#eee2d5;border-radius:99px;overflow:hidden;margin-top:6px;
+  .tools{
+    width:60px; flex:none; background:var(--panel);
+    border-right:1px solid var(--line);
+    display:flex; flex-direction:column; align-items:center;
+    padding:14px 0; gap:8px;
   }
-  .progressFill{
-    height:100%;background:var(--accent);width:0%;transition:width .2s;
+  .tool-btn{
+    width:40px; height:40px; border-radius:9px; border:1px solid transparent;
+    background:transparent; color:var(--text-dim); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
   }
-  .progressLabel{font-size:12.5px;color:var(--muted);}
+  .tool-btn svg{width:19px;height:19px;}
+  .tool-btn:hover{background:var(--panel-2); color:var(--text);}
+  .tool-btn.active{background:var(--accent-dim); color:var(--accent); border-color:var(--accent);}
+  .tool-label{font-family:var(--mono); font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.06em; margin-top:-2px;}
 
   .stage{
-    position:relative;
-    width:100%;
-    overflow:auto;
-    border-radius:10px;
-    border:1px solid var(--line);
+    flex:1; position:relative; overflow:auto;
     background:
-      linear-gradient(45deg,#eee 25%,transparent 25%),
-      linear-gradient(-45deg,#eee 25%,transparent 25%),
-      linear-gradient(45deg,transparent 75%,#eee 75%),
-      linear-gradient(-45deg,transparent 75%,#eee 75%);
-    background-size:16px 16px;
-    background-position:0 0,0 8px,8px -8px,-8px 0px;
-    touch-action:none;
+      linear-gradient(45deg, #1a1c22 25%, transparent 25%) 0 0/24px 24px,
+      linear-gradient(-45deg, #1a1c22 25%, transparent 25%) 0 0/24px 24px,
+      linear-gradient(45deg, transparent 75%, #1a1c22 75%) 0 0/24px 24px,
+      linear-gradient(-45deg, transparent 75%, #1a1c22 75%) 0 0/24px 24px,
+      var(--bg);
+    display:flex; align-items:center; justify-content:center;
   }
-  canvas{display:block;max-width:100%;height:auto;cursor:crosshair;}
+  .canvas-outer{position:relative;}
+  #canvasWrap{position:relative; transform-origin: top left; box-shadow:0 20px 60px rgba(0,0,0,.5); background:#000;}
+  #baseCanvas{display:block; width:100%; height:100%;}
 
-  .edit-card{
-    display:none;
-    margin-top:14px;
-    padding:14px;
-    border-radius:12px;
-    background:#fbf1ea;
-    border:1px solid #ecd9c9;
+  .empty-state{
+    display:flex; flex-direction:column; align-items:center; gap:14px;
+    color:var(--text-dim); text-align:center; max-width:340px;
   }
-  .edit-card.show{display:block;}
-  .edit-card label{
-    display:block;font-size:12px;font-weight:700;color:var(--accent);
-    text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;
-  }
-  .edit-card input[type=text]{
-    width:100%;padding:10px 12px;font-size:15px;border-radius:8px;
-    border:1px solid var(--line);margin-bottom:10px;font-family:inherit;
-  }
-  .row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
-  .field{flex:1;min-width:110px;}
-  .field label{margin-bottom:4px;}
-  .field input[type=range]{width:100%;}
-  .field input[type=color]{width:100%;height:34px;border:1px solid var(--line);border-radius:8px;padding:2px;background:#fff;}
-  .valdisp{font-size:12px;color:var(--muted);}
-  .actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
+  .empty-state .icon{width:56px;height:56px; color:var(--accent);}
+  .empty-state h2{font-family:var(--display); color:var(--text); font-size:20px; margin:0;}
+  .empty-state p{font-size:13px; line-height:1.6; margin:0;}
+  .drop-hint{font-family:var(--mono); font-size:11px; color:var(--text-dim); border:1px dashed var(--line); padding:10px 14px; border-radius:8px;}
 
-  .steps{display:flex;gap:8px;margin-bottom:14px;font-size:12.5px;color:var(--muted);}
-  .step{flex:1;padding:8px 10px;border-radius:8px;background:#fff;border:1px solid var(--line);text-align:center;}
-  .step.active{border-color:var(--accent);color:var(--accent);font-weight:700;background:#fbf1ea;}
-
-  .badge{
-    display:inline-block;font-size:11.5px;font-weight:700;color:var(--accent);
-    background:#fbf1ea;border:1px solid #ecd9c9;border-radius:99px;padding:2px 9px;margin-left:6px;
+  .text-el{
+    position:absolute; left:0; top:0;
+    padding:2px; min-width:20px; min-height:1em;
+    outline:none; cursor:move; white-space:pre-wrap; word-break:break-word;
+    border:1.5px solid transparent; border-radius:2px;
+  }
+  .text-el.selected{border-color:var(--accent); box-shadow:0 0 0 3px rgba(95,168,255,.15);}
+  .text-el.editing{cursor:text; border-color:var(--accent);}
+  .resize-handle{
+    position:absolute; width:11px; height:11px; right:-6px; bottom:-6px;
+    background:var(--accent); border:2px solid #0E1116; border-radius:3px; cursor:nwse-resize;
   }
 
-  footer{text-align:center;color:var(--muted);font-size:12px;margin-top:22px;}
+  .erase-rect{
+    position:absolute; border:1.5px dashed var(--warn); background:rgba(232,163,61,.18);
+    pointer-events:none;
+  }
+
+  /* ---------- Properties panel ---------- */
+  .properties{
+    width:260px; flex:none; background:var(--panel);
+    border-left:1px solid var(--line); overflow-y:auto;
+    padding:16px; display:flex; flex-direction:column; gap:18px;
+  }
+  .panel-title{font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-dim); margin:0 0 10px 0;}
+  .field{display:flex; flex-direction:column; gap:6px; margin-bottom:12px;}
+  .field label{font-size:11.5px; color:var(--text-dim); display:flex; justify-content:space-between;}
+  .field select, .field input[type="text"]{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    padding:7px 9px; border-radius:6px; font-size:13px; font-family:var(--body);
+  }
+  .field input[type="range"]{width:100%; accent-color:var(--accent);}
+  .row2{display:flex; gap:8px;}
+  .row2 > *{flex:1;}
+  .swatches{display:flex; gap:6px; flex-wrap:wrap;}
+  .swatch{width:22px;height:22px;border-radius:6px;border:2px solid var(--line); cursor:pointer;}
+  .swatch.active{border-color:var(--accent);}
+  .colorpick{width:36px; height:30px; border:1px solid var(--line); border-radius:6px; background:none; padding:0; cursor:pointer;}
+  .toggle-group{display:flex; gap:6px;}
+  .toggle-btn{flex:1; padding:7px 0; text-align:center; background:var(--panel-2); border:1px solid var(--line); border-radius:6px; cursor:pointer; font-size:13px; color:var(--text-dim);}
+  .toggle-btn.on{background:var(--accent-dim); color:var(--accent); border-color:var(--accent);}
+  .danger-btn{
+    background:transparent; border:1px solid #5a2c2c; color:#e08787; padding:9px; border-radius:7px;
+    font-size:12.5px; cursor:pointer; width:100%; font-family:var(--body);
+  }
+  .danger-btn:hover{background:#2a1717;}
+  .empty-props{color:var(--text-dim); font-size:12.5px; line-height:1.7;}
+  .empty-props b{color:var(--text);}
+
+  .layer-row{
+    display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:6px; cursor:pointer;
+    font-size:12px; color:var(--text-dim); border:1px solid transparent;
+  }
+  .layer-row:hover{background:var(--panel-2);}
+  .layer-row.selected{background:var(--accent-dim); color:var(--accent); border-color:var(--accent);}
+  .layer-row span.txt{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .layer-row .del{opacity:0; color:#e08787; font-size:14px;}
+  .layer-row:hover .del{opacity:1;}
+
+  input[type="file"]{display:none;}
+
+  .scan-overlay{
+    position:absolute; inset:0; background:rgba(15,17,22,.82); backdrop-filter:blur(2px);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+    z-index:50;
+  }
+  .scan-overlay.hidden{display:none;}
+  .spinner{
+    width:34px; height:34px; border-radius:50%;
+    border:3px solid #31343f; border-top-color:var(--accent);
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg);} }
+  .scan-status{font-family:var(--mono); font-size:12px; color:var(--text-dim); text-align:center;}
+  .scan-status b{color:var(--text);}
+  .scan-bar{width:220px; height:5px; border-radius:3px; background:#2a2d37; overflow:hidden;}
+  .scan-bar-fill{height:100%; width:0%; background:var(--accent); transition:width .2s;}
+  ::-webkit-scrollbar{width:9px; height:9px;}
+  ::-webkit-scrollbar-thumb{background:#31343f; border-radius:5px;}
+  ::-webkit-scrollbar-track{background:transparent;}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>Edit Teks di Gambar</h1>
-    <p class="sub">Upload gambar, biar sistem otomatis mengelompokkan tiap teks jadi kotak sendiri-sendiri. Tap salah satu kotak, ganti teksnya, selesai.</p>
-  </header>
+<div class="app">
 
-  <div class="steps">
-    <div class="step active" id="step1">1. Upload gambar</div>
-    <div class="step" id="step2">2. Pilih teks</div>
-    <div class="step" id="step3">3. Simpan hasil</div>
-  </div>
-
-  <div class="panel" id="uploadPanel">
-    <div class="drop" id="drop">
-      <p><strong>Ketuk untuk pilih gambar</strong><br>atau tarik & lepas file di sini</p>
-    </div>
+  <div class="topbar">
+    <div class="logo"><span class="dot"></span>Retex</div>
+    <div class="sep"></div>
+    <div class="file-name" id="fileName">Belum ada gambar</div>
+    <div class="spacer"></div>
+    <label class="btn" for="fileInput">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+      Buka Gambar
+    </label>
     <input type="file" id="fileInput" accept="image/*">
+    <button class="btn" id="resetBtn" disabled>Mulai Ulang</button>
+    <button class="btn primary" id="autoBtn" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3"/></svg>
+      Deteksi &amp; Ganti Otomatis
+    </button>
+    <button class="btn" id="downloadBtn" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12M12 16l-4-4M12 16l4-4"/><path d="M4 20h16"/></svg>
+      Unduh PNG
+    </button>
   </div>
 
-  <div class="panel" id="editorPanel" style="display:none;">
-    <div class="modeToggle">
-      <button id="modeAuto" class="active">Otomatis (deteksi teks)</button>
-      <button id="modeManual">Manual (gambar kotak)</button>
+  <div class="workspace">
+    <div class="tools">
+      <button class="tool-btn active" data-tool="select" title="Pilih & pindah">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l7.07 17 2.51-7.39L21 11.07z"/></svg>
+      </button>
+      <div class="tool-label">Pilih</div>
+      <button class="tool-btn" data-tool="text" title="Tambah teks">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 5h14M12 5v14"/></svg>
+      </button>
+      <div class="tool-label">Teks</div>
+      <button class="tool-btn" data-tool="erase" title="Hapus teks lama">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6 4 12-12-6-4-9 9zm6 4L4 16"/></svg>
+      </button>
+      <div class="tool-label">Hapus</div>
     </div>
 
-    <div class="toolbar">
-      <button class="btn ghost" id="newImageBtn">Ganti gambar</button>
-      <button class="btn ghost" id="rescanBtn">Deteksi ulang</button>
-      <button class="btn ghost" id="undoBtn" disabled>Undo</button>
-      <button class="btn primary" id="downloadBtn" disabled>Download hasil</button>
-    </div>
-
-    <div class="progressWrap" id="progressWrap">
-      <div class="progressLabel" id="progressLabel">Mendeteksi teks...</div>
-      <div class="progressBar"><div class="progressFill" id="progressFill"></div></div>
-    </div>
-
-    <p class="hint" id="modeHint">Sedang mendeteksi teks di gambar kamu — setiap teks yang ketemu akan dikotakin otomatis. Tap salah satu kotak buat mengganti teksnya. <span class="badge" id="detectedCount"></span></p>
-
-    <div class="stage">
-      <canvas id="canvas"></canvas>
-    </div>
-
-    <div class="edit-card" id="editCard">
-      <label>Teks pengganti</label>
-      <input type="text" id="newTextInput" placeholder="Contoh: 13 Pro Max">
-      <p class="hint" style="margin-top:-4px;">Ukuran, warna, tebal, dan perataan sudah dideteksi otomatis dari gambar. Ubah cuma kalau kurang pas.</p>
-
-      <div class="row">
-        <div class="field">
-          <label>Ukuran font</label>
-          <input type="range" id="fontSize" min="8" max="80" value="20">
-          <div class="valdisp"><span id="fontSizeVal">20</span>px</div>
-        </div>
-        <div class="field">
-          <label>Warna background</label>
-          <input type="color" id="bgColor" value="#ffffff">
-        </div>
-        <div class="field">
-          <label>Warna teks</label>
-          <input type="color" id="textColor" value="#8a8378">
+    <div class="stage" id="stage">
+      <div class="empty-state" id="emptyState">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="8" cy="9" r="1.5"/></svg>
+        <h2>Edit teks di dalam foto</h2>
+        <p>Unggah gambar, lalu klik <b style="color:var(--text)">Deteksi &amp; Ganti Otomatis</b> — teks lama akan terhapus dan digantikan lapisan teks baru yang otomatis mengikuti warna, ukuran, ketebalan, dan transparansi aslinya. Atau edit manual dengan alat <b style="color:var(--text)">Hapus</b> &amp; <b style="color:var(--text)">Teks</b>.</p>
+        <div class="drop-hint">seret &amp; lepas gambar di sini, atau klik "Buka Gambar"</div>
+      </div>
+      <div class="canvas-outer" id="canvasOuter" style="display:none;">
+        <div id="canvasWrap">
+          <canvas id="baseCanvas"></canvas>
         </div>
       </div>
-      <div class="row">
-        <div class="field">
-          <label>Perataan</label>
-          <select id="alignSel" class="btn" style="width:100%;">
-            <option value="left">Kiri</option>
-            <option value="right">Kanan</option>
-            <option value="center" selected>Tengah</option>
-          </select>
-        </div>
-        <div class="field" style="display:flex;align-items:flex-end;">
-          <label style="display:flex;align-items:center;gap:6px;margin-bottom:8px;text-transform:none;letter-spacing:0;font-weight:600;color:var(--ink);">
-            <input type="checkbox" id="boldChk" style="width:16px;height:16px;"> Tebal (bold)
-          </label>
-        </div>
+      <div class="scan-overlay hidden" id="scanOverlay">
+        <div class="spinner"></div>
+        <div class="scan-status" id="scanStatus">Menyiapkan…</div>
+        <div class="scan-bar"><div class="scan-bar-fill" id="scanBarFill"></div></div>
       </div>
+    </div>
 
-      <div class="actions">
-        <button class="btn ghost" id="cancelEdit">Batal</button>
-        <button class="btn primary" id="applyEdit">Terapkan</button>
+    <div class="properties" id="properties">
+      <div id="propsBody">
+        <p class="empty-props">Pilih alat <b>Teks</b> lalu klik pada gambar untuk menambahkan teks baru.<br><br>Pilih alat <b>Hapus</b> untuk menyeret kotak di atas teks lama pada foto — area tersebut akan dihaluskan agar teks lama hilang.</p>
+      </div>
+      <div>
+        <p class="panel-title">Lapisan teks</p>
+        <div id="layerList" style="display:flex;flex-direction:column;gap:4px;"></div>
       </div>
     </div>
   </div>
-
-  <footer>Semua proses (termasuk deteksi teks) berjalan langsung di browser kamu — gambar tidak diunggah ke server manapun.</footer>
 </div>
 
 <script>
 (function(){
-  const drop = document.getElementById('drop');
   const fileInput = document.getElementById('fileInput');
-  const uploadPanel = document.getElementById('uploadPanel');
-  const editorPanel = document.getElementById('editorPanel');
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
-  const editCard = document.getElementById('editCard');
-  const newTextInput = document.getElementById('newTextInput');
-  const fontSize = document.getElementById('fontSize');
-  const fontSizeVal = document.getElementById('fontSizeVal');
-  const bgColor = document.getElementById('bgColor');
-  const textColor = document.getElementById('textColor');
-  const alignSel = document.getElementById('alignSel');
-  const boldChk = document.getElementById('boldChk');
-  const applyEdit = document.getElementById('applyEdit');
-  const cancelEdit = document.getElementById('cancelEdit');
-  const undoBtn = document.getElementById('undoBtn');
+  const fileName = document.getElementById('fileName');
+  const emptyState = document.getElementById('emptyState');
+  const canvasOuter = document.getElementById('canvasOuter');
+  const canvasWrap = document.getElementById('canvasWrap');
+  const baseCanvas = document.getElementById('baseCanvas');
+  const ctx = baseCanvas.getContext('2d');
+  const stage = document.getElementById('stage');
+  const resetBtn = document.getElementById('resetBtn');
+  const autoBtn = document.getElementById('autoBtn');
   const downloadBtn = document.getElementById('downloadBtn');
-  const newImageBtn = document.getElementById('newImageBtn');
-  const rescanBtn = document.getElementById('rescanBtn');
-  const modeAuto = document.getElementById('modeAuto');
-  const modeManual = document.getElementById('modeManual');
-  const modeHint = document.getElementById('modeHint');
-  const progressWrap = document.getElementById('progressWrap');
-  const progressFill = document.getElementById('progressFill');
-  const progressLabel = document.getElementById('progressLabel');
-  const detectedCount = document.getElementById('detectedCount');
-  const step1 = document.getElementById('step1');
-  const step2 = document.getElementById('step2');
-  const step3 = document.getElementById('step3');
+  const scanOverlay = document.getElementById('scanOverlay');
+  const scanStatus = document.getElementById('scanStatus');
+  const scanBarFill = document.getElementById('scanBarFill');
+  const propsBody = document.getElementById('propsBody');
+  const layerList = document.getElementById('layerList');
+  const toolBtns = document.querySelectorAll('.tool-btn');
 
-  let img = new Image();
-  let history = [];
-  let currentBox = null;
-  let dragging = false;
-  let startX=0, startY=0, downX=0, downY=0;
-  let mode = 'auto'; // 'auto' | 'manual'
-  let detectedBoxes = []; // {x,y,w,h,text}
+  let tool = 'select';
+  let fitScale = 1;
+  let textEls = []; // {id, x,y,w, text, fontSize, fontFamily, color, bold, italic, align, rotation, opacity}
+  let selectedId = null;
+  let idCounter = 1;
+  let hasImage = false;
 
-  function loadFile(file){
-    if(!file || !file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = e => {
-      img = new Image();
-      img.onload = () => {
-        setupCanvas();
-        uploadPanel.style.display = 'none';
-        editorPanel.style.display = 'block';
-        step1.classList.remove('active');
-        step2.classList.add('active');
-        if(mode === 'auto') runDetection();
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  }
+  const FONTS = ['Inter','Space Grotesk','JetBrains Mono','Georgia','Arial','Impact','Times New Roman'];
+  const SWATCH_COLORS = ['#FFFFFF','#111111','#5FA8FF','#E8A33D','#E85D5D','#63D97A','#F2D24B'];
 
-  function setupCanvas(){
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    ctx.drawImage(img, 0, 0);
-    history = [ctx.getImageData(0,0,canvas.width,canvas.height)];
-    undoBtn.disabled = true;
-    downloadBtn.disabled = false;
-    detectedBoxes = [];
-  }
-
-  drop.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', e => loadFile(e.target.files[0]));
-  ['dragover','dragenter'].forEach(ev => drop.addEventListener(ev, e=>{e.preventDefault(); drop.classList.add('drag');}));
-  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e=>{e.preventDefault(); drop.classList.remove('drag');}));
-  drop.addEventListener('drop', e => { if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
-
-  newImageBtn.addEventListener('click', () => {
-    editorPanel.style.display = 'none';
-    uploadPanel.style.display = 'block';
-    editCard.classList.remove('show');
-    step2.classList.remove('active');
-    step3.classList.remove('active');
-    step1.classList.add('active');
-    fileInput.value = '';
+  toolBtns.forEach(b=>{
+    b.addEventListener('click', ()=>{
+      toolBtns.forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      tool = b.dataset.tool;
+      deselect();
+      stage.style.cursor = tool==='erase' ? 'crosshair' : (tool==='text' ? 'text' : 'default');
+    });
   });
 
-  modeAuto.addEventListener('click', () => setMode('auto'));
-  modeManual.addEventListener('click', () => setMode('manual'));
+  // ---------- Load image ----------
+  fileInput.addEventListener('change', e=>{
+    if(e.target.files && e.target.files[0]) loadImage(e.target.files[0]);
+  });
+  ['dragover','drop'].forEach(ev=>stage.addEventListener(ev, e=>e.preventDefault()));
+  stage.addEventListener('drop', e=>{
+    e.preventDefault();
+    const f = e.dataTransfer.files[0];
+    if(f && f.type.startsWith('image/')) loadImage(f);
+  });
 
-  function setMode(m){
-    mode = m;
-    modeAuto.classList.toggle('active', m==='auto');
-    modeManual.classList.toggle('active', m==='manual');
-    editCard.classList.remove('show');
-    currentBox = null;
-    if(m === 'auto'){
-      modeHint.innerHTML = detectedBoxes.length
-        ? `Tap salah satu kotak untuk mengganti teksnya. <span class="badge">${detectedBoxes.length} teks terdeteksi</span>`
-        : 'Belum ada deteksi. Klik "Deteksi ulang" untuk mendeteksi teks di gambar ini.';
-      drawOverlays();
-    } else {
-      modeHint.textContent = 'Tarik kotak (klik-tahan-geser) di atas teks yang mau kamu ganti.';
-      redrawBase();
-    }
+  function loadImage(file){
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = ()=>{
+      baseCanvas.width = img.naturalWidth;
+      baseCanvas.height = img.naturalHeight;
+      ctx.drawImage(img,0,0);
+      fileName.textContent = file.name;
+      emptyState.style.display = 'none';
+      canvasOuter.style.display='block';
+      hasImage = true;
+      resetBtn.disabled = false;
+      downloadBtn.disabled = false;
+      autoBtn.disabled = false;
+      textEls = []; selectedId=null; renderLayers(); renderProps();
+      fitCanvas();
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
   }
 
-  rescanBtn.addEventListener('click', () => { if(mode!=='auto') setMode('auto'); runDetection(); });
+  function fitCanvas(){
+    const pad = 48;
+    const availW = stage.clientWidth - pad*2;
+    const availH = stage.clientHeight - pad*2;
+    fitScale = Math.min(availW/baseCanvas.width, availH/baseCanvas.height, 1);
+    canvasWrap.style.width = baseCanvas.width+'px';
+    canvasWrap.style.height = baseCanvas.height+'px';
+    canvasWrap.style.transform = `scale(${fitScale})`;
+    canvasOuter.style.width = (baseCanvas.width*fitScale)+'px';
+    canvasOuter.style.height = (baseCanvas.height*fitScale)+'px';
+  }
+  window.addEventListener('resize', ()=>{ if(hasImage) fitCanvas(); });
 
-  async function runDetection(){
+  resetBtn.addEventListener('click', ()=>{
+    if(!confirm('Mulai ulang dan hapus semua perubahan?')) return;
+    emptyState.style.display='flex';
+    canvasOuter.style.display='none';
+    hasImage=false; textEls=[]; selectedId=null;
+    document.querySelectorAll('.text-el').forEach(n=>n.remove());
+    fileName.textContent='Belum ada gambar';
+    resetBtn.disabled=true; downloadBtn.disabled=true; autoBtn.disabled=true;
+    renderLayers(); renderProps();
+  });
+
+  // ---------- Coordinate helpers ----------
+  function canvasPoint(evt){
+    const r = canvasWrap.getBoundingClientRect();
+    return { x:(evt.clientX - r.left)/fitScale, y:(evt.clientY - r.top)/fitScale };
+  }
+
+  // ---------- Erase tool ----------
+  let erasing = false, eraseStart=null, eraseBox=null;
+  canvasWrap.addEventListener('mousedown', e=>{
+    if(!hasImage) return;
+    if(tool==='erase' && e.target===baseCanvas){
+      erasing = true;
+      eraseStart = canvasPoint(e);
+      eraseBox = document.createElement('div');
+      eraseBox.className='erase-rect';
+      canvasWrap.appendChild(eraseBox);
+    } else if(tool==='text' && (e.target===baseCanvas)){
+      const p = canvasPoint(e);
+      addTextEl(p.x, p.y);
+    } else if(e.target===baseCanvas){
+      deselect();
+    }
+  });
+  window.addEventListener('mousemove', e=>{
+    if(erasing){
+      const p = canvasPoint(e);
+      const x = Math.min(p.x, eraseStart.x), y = Math.min(p.y, eraseStart.y);
+      const w = Math.abs(p.x-eraseStart.x), h = Math.abs(p.y-eraseStart.y);
+      eraseBox.style.left=x+'px'; eraseBox.style.top=y+'px';
+      eraseBox.style.width=w+'px'; eraseBox.style.height=h+'px';
+    }
+  });
+  window.addEventListener('mouseup', e=>{
+    if(erasing){
+      erasing = false;
+      const p = canvasPoint(e);
+      const x = Math.max(0,Math.round(Math.min(p.x, eraseStart.x)));
+      const y = Math.max(0,Math.round(Math.min(p.y, eraseStart.y)));
+      const w = Math.round(Math.abs(p.x-eraseStart.x));
+      const h = Math.round(Math.abs(p.y-eraseStart.y));
+      if(eraseBox) eraseBox.remove();
+      if(w>3 && h>3) eraseRegion(x,y,w,h);
+    }
+  });
+
+  function eraseRegion(x,y,w,h){
+    x = Math.max(0,x); y=Math.max(0,y);
+    w = Math.min(w, baseCanvas.width-x);
+    h = Math.min(h, baseCanvas.height-y);
+    const pad = Math.round(Math.max(w,h)*0.5) + 24;
+    const sx = Math.max(0, x-pad), sy = Math.max(0, y-pad);
+    const ex = Math.min(baseCanvas.width, x+w+pad), ey = Math.min(baseCanvas.height, y+h+pad);
+    const pw = ex-sx, ph = ey-sy;
+
+    const tmp = document.createElement('canvas'); tmp.width=pw; tmp.height=ph;
+    tmp.getContext('2d').drawImage(baseCanvas, sx,sy,pw,ph, 0,0,pw,ph);
+
+    const blurCanvas = document.createElement('canvas'); blurCanvas.width=pw; blurCanvas.height=ph;
+    const bctx = blurCanvas.getContext('2d');
+    bctx.filter = 'blur(22px)';
+    bctx.drawImage(tmp,0,0);
+    const blurCanvas2 = document.createElement('canvas'); blurCanvas2.width=pw; blurCanvas2.height=ph;
+    const bctx2 = blurCanvas2.getContext('2d');
+    bctx2.filter = 'blur(10px)';
+    bctx2.drawImage(blurCanvas,0,0);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x,y,w,h);
+    ctx.clip();
+    ctx.drawImage(blurCanvas2, sx, sy);
+    ctx.restore();
+  }
+
+  // ---------- Auto-detect teks + analisis gaya (warna/ukuran/tebal/transparansi) ----------
+  function rgbToHex(r,g,b){
+    return '#' + [r,g,b].map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
+  }
+
+  // Menganalisis satu area (SEBELUM dihapus) untuk menebak warna teks, ukuran font,
+  // ketebalan (bold/reguler) dan transparansi, dengan memisahkan piksel "teks" vs "latar"
+  // memakai ambang batas luminansi otomatis (mirip metode Otsu) lalu mengambil klaster minoritas
+  // sebagai warna teks.
+  function analyzeRegionStyle(x,y,w,h){
+    x = Math.max(0, Math.round(x)); y = Math.max(0, Math.round(y));
+    w = Math.max(1, Math.round(w)); h = Math.max(1, Math.round(h));
+    w = Math.min(w, baseCanvas.width-x); h = Math.min(h, baseCanvas.height-y);
+    const data = ctx.getImageData(x,y,w,h).data;
+    const n = w*h;
+    const lum = new Float32Array(n);
+    let hist = new Array(256).fill(0);
+    for(let i=0;i<n;i++){
+      const r=data[i*4], g=data[i*4+1], b=data[i*4+2];
+      const l = 0.299*r+0.587*g+0.114*b;
+      lum[i]=l;
+      hist[Math.round(l)]++;
+    }
+    // Ambang Otsu sederhana
+    let sum=0; for(let t=0;t<256;t++) sum += t*hist[t];
+    let sumB=0, wB=0, wF=0, maxVar=0, threshold=127;
+    for(let t=0;t<256;t++){
+      wB += hist[t]; if(wB===0) continue;
+      wF = n-wB; if(wF===0) break;
+      sumB += t*hist[t];
+      const mB = sumB/wB, mF=(sum-sumB)/wF;
+      const between = wB*wF*(mB-mF)*(mB-mF);
+      if(between>maxVar){ maxVar=between; threshold=t; }
+    }
+    let darkR=0,darkG=0,darkB=0,darkA=0,darkN=0;
+    let lightR=0,lightG=0,lightB=0,lightN=0;
+    for(let i=0;i<n;i++){
+      if(lum[i]<threshold){ darkR+=data[i*4]; darkG+=data[i*4+1]; darkB+=data[i*4+2]; darkA+=data[i*4+3]; darkN++; }
+      else{ lightR+=data[i*4]; lightG+=data[i*4+1]; lightB+=data[i*4+2]; lightN++; }
+    }
+    const darkRatio = darkN/n;
+    // klaster minoritas dianggap sebagai teks (asumsi teks tidak memenuhi >70% area kotak)
+    const textIsDark = darkN>0 && (darkRatio<=0.5 || lightN===0);
+    let color, opacity, fillRatio;
+    if(textIsDark && darkN>0){
+      color = rgbToHex(darkR/darkN, darkG/darkN, darkB/darkN);
+      opacity = Math.max(0.35, Math.min(1, (darkA/darkN)/255));
+      fillRatio = darkRatio;
+    } else if(lightN>0){
+      color = rgbToHex(lightR/lightN, lightG/lightN, lightB/lightN);
+      opacity = 1;
+      fillRatio = lightN/n;
+    } else {
+      color = '#FFFFFF'; opacity = 1; fillRatio = 0.25;
+    }
+    const fontSize = Math.max(8, Math.round(h*0.82));
+    const bold = fillRatio > 0.30;
+    return { color, opacity, fontSize, bold };
+  }
+
+  async function autoDetectAndReplace(){
+    if(!hasImage) return;
     if(typeof Tesseract === 'undefined'){
-      modeHint.textContent = 'Deteksi otomatis gagal dimuat (koneksi internet diperlukan untuk fitur ini). Coba mode Manual di bawah.';
+      alert('Modul OCR gagal dimuat. Pastikan perangkat terhubung ke internet, lalu coba lagi.');
       return;
     }
-    progressWrap.classList.add('show');
-    detectedCount.textContent = '';
-    redrawBase();
-    detectedBoxes = [];
+    scanOverlay.classList.remove('hidden');
+    scanStatus.textContent = 'Menyiapkan mesin OCR…';
+    scanBarFill.style.width = '0%';
+    autoBtn.disabled = true;
     try{
-      const worker = await Tesseract.createWorker('eng', 1, {
-        logger: m => {
-          if(m.status){
-            progressLabel.textContent = statusLabel(m.status);
-            if(typeof m.progress === 'number'){
-              progressFill.style.width = Math.round(m.progress*100) + '%';
-            }
-          }
+      const { data } = await Tesseract.recognize(baseCanvas, 'ind+eng', {
+        logger: m=>{
+          if(m.status) scanStatus.innerHTML = `<b>${labelStatus(m.status)}</b>`;
+          if(typeof m.progress==='number') scanBarFill.style.width = Math.round(m.progress*100)+'%';
         }
       });
-      const { data } = await worker.recognize(canvas);
-      await worker.terminate();
-
-      const lines = (data.lines || []).filter(l => l.text && l.text.trim().length > 0 && (l.confidence===undefined || l.confidence > 35));
-      detectedBoxes = lines.map(l => ({
-        x: l.bbox.x0,
-        y: l.bbox.y0,
-        w: l.bbox.x1 - l.bbox.x0,
-        h: l.bbox.y1 - l.bbox.y0,
-        text: l.text.trim()
-      })).filter(b => b.w > 4 && b.h > 4);
-
-      progressWrap.classList.remove('show');
-      modeHint.innerHTML = detectedBoxes.length
-        ? `Tap salah satu kotak untuk mengganti teksnya. <span class="badge">${detectedBoxes.length} teks terdeteksi</span>`
-        : 'Tidak ada teks yang terdeteksi. Coba mode Manual untuk memilih area sendiri.';
-      drawOverlays();
+      const lines = (data.lines||[]).filter(l=> l.text && l.text.trim().length>0 && l.confidence>35);
+      if(!lines.length){
+        alert('Tidak ada teks yang terdeteksi pada gambar ini. Coba gunakan alat Hapus dan Teks secara manual.');
+        return;
+      }
+      // Analisis gaya semua baris DULU (sebelum area dihapus, supaya sampling warna akurat)
+      const jobs = lines.map(line=>{
+        const {x0,y0,x1,y1} = line.bbox;
+        const w = x1-x0, h = y1-y0;
+        const style = analyzeRegionStyle(x0,y0,w,h);
+        return { x:x0, y:y0, w, h, text:line.text.trim(), style };
+      });
+      // Baru hapus semua area teks lama
+      jobs.forEach(j=> eraseRegion(j.x, j.y, j.w, j.h));
+      // Lalu buat lapisan teks baru yang otomatis meniru komposisi gambar aslinya
+      let firstId = null;
+      jobs.forEach(j=>{
+        const el = {
+          id: idCounter++, x: j.x, y: j.y, w: Math.max(j.w+12, 40),
+          text: j.text, fontSize: j.style.fontSize, fontFamily:'Inter',
+          color: j.style.color, bold: j.style.bold, italic:false,
+          align:'left', rotation:0, opacity: j.style.opacity
+        };
+        textEls.push(el);
+        buildTextNode(el);
+        if(firstId===null) firstId = el.id;
+      });
+      renderLayers();
+      document.querySelector('.tool-btn[data-tool="select"]').click();
+      if(firstId!==null) selectEl(firstId);
     } catch(err){
-      progressWrap.classList.remove('show');
-      modeHint.textContent = 'Deteksi otomatis gagal. Coba mode Manual di bawah untuk memilih area teks sendiri.';
       console.error(err);
+      alert('Terjadi kesalahan saat mendeteksi teks. Coba lagi, atau gunakan alat manual.');
+    } finally{
+      scanOverlay.classList.add('hidden');
+      autoBtn.disabled = false;
     }
   }
-
-  function statusLabel(s){
+  function labelStatus(s){
     const map = {
-      'loading tesseract core':'Menyiapkan mesin OCR...',
-      'initializing tesseract':'Menyiapkan mesin OCR...',
-      'loading language traineddata':'Memuat data bahasa...',
-      'initializing api':'Menyiapkan...',
-      'recognizing text':'Mendeteksi teks...'
+      'loading tesseract core':'Memuat mesin OCR…',
+      'initializing tesseract':'Menyiapkan…',
+      'loading language traineddata':'Memuat data bahasa…',
+      'initializing api':'Menyiapkan API…',
+      'recognizing text':'Membaca teks pada gambar…'
     };
     return map[s] || s;
   }
+  autoBtn.addEventListener('click', autoDetectAndReplace);
 
-  function redrawBase(){
-    ctx.putImageData(history[history.length-1], 0, 0);
-  }
-
-  function drawOverlays(){
-    redrawBase();
-    if(mode !== 'auto') return;
-    ctx.save();
-    detectedBoxes.forEach(b => {
-      ctx.fillStyle = 'rgba(198,93,46,0.16)';
-      ctx.fillRect(b.x, b.y, b.w, b.h);
-      ctx.strokeStyle = 'rgba(198,93,46,0.85)';
-      ctx.lineWidth = Math.max(1.5, canvas.width*0.0015);
-      ctx.strokeRect(b.x, b.y, b.w, b.h);
-    });
-    ctx.restore();
-  }
-
-  function getPos(e){
-    const rect = canvas.getBoundingClientRect();
-    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-    const sx = canvas.width / rect.width;
-    const sy = canvas.height / rect.height;
-    return { x: cx*sx, y: cy*sy };
-  }
-
-  function hitTest(px, py){
-    let best = null;
-    for(const b of detectedBoxes){
-      if(px >= b.x && px <= b.x+b.w && py >= b.y && py <= b.y+b.h){
-        if(!best || (b.w*b.h) < (best.w*best.h)) best = b;
-      }
-    }
-    return best;
-  }
-
-  function onDown(e){
-    e.preventDefault();
-    const p = getPos(e);
-    downX = p.x; downY = p.y;
-    if(mode === 'auto'){
-      dragging = false;
-      return;
-    }
-    dragging = true;
-    startX = p.x; startY = p.y;
-    currentBox = {x:p.x,y:p.y,w:0,h:0};
-  }
-  function onMove(e){
-    if(mode !== 'manual' || !dragging) return;
-    e.preventDefault();
-    const p = getPos(e);
-    currentBox = {
-      x: Math.min(startX,p.x), y: Math.min(startY,p.y),
-      w: Math.abs(p.x-startX), h: Math.abs(p.y-startY)
+  // ---------- Text elements ----------
+  function addTextEl(x,y){
+    const el = {
+      id: idCounter++, x: Math.round(x), y: Math.round(y), w: 220,
+      text: 'Teks baru', fontSize: 32, fontFamily:'Inter', color:'#FFFFFF',
+      bold:false, italic:false, align:'left', rotation:0, opacity:1
     };
-    redrawBase();
-    ctx.save();
-    ctx.strokeStyle = '#c65d2e';
-    ctx.lineWidth = Math.max(2, canvas.width*0.002);
-    ctx.setLineDash([6,4]);
-    ctx.strokeRect(currentBox.x, currentBox.y, currentBox.w, currentBox.h);
-    ctx.restore();
+    textEls.push(el);
+    buildTextNode(el);
+    selectEl(el.id);
+    renderLayers();
+    // switch to select tool and focus for editing
+    document.querySelector('.tool-btn[data-tool="select"]').click();
+    setTimeout(()=>{
+      const node = document.getElementById('txt-'+el.id);
+      node.focus();
+      document.execCommand('selectAll', false, null);
+    }, 30);
   }
-  function onUp(e){
-    const p = getPos(e);
-    if(mode === 'auto'){
-      const dist = Math.hypot(p.x-downX, p.y-downY);
-      if(dist < 8){
-        const hit = hitTest(p.x, p.y);
-        if(hit){
-          currentBox = hit;
-          openEditCard(hit.text);
-        }
+
+  function buildTextNode(el){
+    const node = document.createElement('div');
+    node.className='text-el';
+    node.id = 'txt-'+el.id;
+    node.contentEditable = 'true';
+    node.spellcheck = false;
+    node.innerText = el.text;
+    applyStyles(node, el);
+    canvasWrap.appendChild(node);
+
+    node.addEventListener('mousedown', e=>{
+      if(tool!=='select') return;
+      e.stopPropagation();
+      selectEl(el.id);
+      if(node.classList.contains('editing')) return;
+      startDrag(e, el, node);
+    });
+    node.addEventListener('dblclick', e=>{
+      e.stopPropagation();
+      node.classList.add('editing');
+      node.focus();
+    });
+    node.addEventListener('blur', ()=>{
+      node.classList.remove('editing');
+      el.text = node.innerText;
+      renderLayers();
+    });
+    node.addEventListener('input', ()=>{ el.text = node.innerText; });
+
+    const handle = document.createElement('div');
+    handle.className='resize-handle';
+    node.appendChild(handle);
+    handle.addEventListener('mousedown', e=>{
+      e.stopPropagation(); e.preventDefault();
+      const startX = e.clientX, startW = el.w;
+      function onMove(ev){
+        const dx = (ev.clientX-startX)/fitScale;
+        el.w = Math.max(30, Math.round(startW+dx));
+        node.style.width = el.w+'px';
       }
+      function onUp(){ window.removeEventListener('mousemove',onMove); window.removeEventListener('mouseup',onUp); }
+      window.addEventListener('mousemove',onMove);
+      window.addEventListener('mouseup',onUp);
+    });
+  }
+
+  function startDrag(e, el, node){
+    const startX=e.clientX, startY=e.clientY, ox=el.x, oy=el.y;
+    let moved=false;
+    function onMove(ev){
+      moved=true;
+      el.x = Math.round(ox + (ev.clientX-startX)/fitScale);
+      el.y = Math.round(oy + (ev.clientY-startY)/fitScale);
+      node.style.left = el.x+'px';
+      node.style.top = el.y+'px';
+    }
+    function onUp(){ window.removeEventListener('mousemove',onMove); window.removeEventListener('mouseup',onUp); }
+    window.addEventListener('mousemove',onMove);
+    window.addEventListener('mouseup',onUp);
+  }
+
+  function applyStyles(node, el){
+    node.style.left = el.x+'px';
+    node.style.top = el.y+'px';
+    node.style.width = el.w+'px';
+    node.style.fontSize = el.fontSize+'px';
+    node.style.fontFamily = `'${el.fontFamily}', sans-serif`;
+    node.style.color = el.color;
+    node.style.fontWeight = el.bold ? '700':'400';
+    node.style.fontStyle = el.italic ? 'italic':'normal';
+    node.style.textAlign = el.align;
+    node.style.opacity = el.opacity;
+    node.style.transform = `rotate(${el.rotation}deg)`;
+    node.style.lineHeight = '1.2';
+  }
+
+  function selectEl(id){
+    selectedId = id;
+    document.querySelectorAll('.text-el').forEach(n=> n.classList.toggle('selected', n.id==='txt-'+id));
+    renderProps();
+    renderLayers();
+  }
+  function deselect(){
+    selectedId = null;
+    document.querySelectorAll('.text-el').forEach(n=>n.classList.remove('selected','editing'));
+    renderProps(); renderLayers();
+  }
+  document.addEventListener('keydown', e=>{
+    if(e.key==='Delete' || e.key==='Backspace'){
+      const active = document.activeElement;
+      if(active && active.classList && active.classList.contains('text-el')) return;
+      if(selectedId!==null){ deleteEl(selectedId); }
+    }
+    if(e.key==='Escape') deselect();
+  });
+  function deleteEl(id){
+    textEls = textEls.filter(t=>t.id!==id);
+    const node = document.getElementById('txt-'+id);
+    if(node) node.remove();
+    selectedId=null;
+    renderLayers(); renderProps();
+  }
+
+  function getEl(id){ return textEls.find(t=>t.id===id); }
+
+  // ---------- Properties panel ----------
+  function renderProps(){
+    const el = selectedId!==null ? getEl(selectedId) : null;
+    if(!el){
+      propsBody.innerHTML = `<p class="empty-props">Pilih alat <b>Teks</b> lalu klik pada gambar untuk menambahkan teks baru.<br><br>Pilih alat <b>Hapus</b> untuk menyeret kotak di atas teks lama pada foto — area tersebut akan dihaluskan agar teks lama hilang.</p>`;
       return;
     }
-    if(!dragging) return;
-    dragging = false;
-    if(currentBox.w < 6 || currentBox.h < 6){
-      redrawBase();
-      currentBox = null;
-      return;
-    }
-    openEditCard('');
+    propsBody.innerHTML = `
+      <p class="panel-title">Properti Teks</p>
+      <div class="field"><label>Font</label>
+        <select id="p-font">${FONTS.map(f=>`<option value="${f}" ${f===el.fontFamily?'selected':''}>${f}</option>`).join('')}</select>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Ukuran <span id="p-size-val">${el.fontSize}px</span></label>
+          <input type="range" id="p-size" min="8" max="200" value="${el.fontSize}">
+        </div>
+        <div class="field"><label>Rotasi <span id="p-rot-val">${el.rotation}°</span></label>
+          <input type="range" id="p-rot" min="-180" max="180" value="${el.rotation}">
+        </div>
+      </div>
+      <div class="field"><label>Warna</label>
+        <div class="swatches">
+          ${SWATCH_COLORS.map(c=>`<div class="swatch ${c.toLowerCase()===el.color.toLowerCase()?'active':''}" data-c="${c}" style="background:${c}"></div>`).join('')}
+          <input type="color" class="colorpick" id="p-color" value="${el.color}">
+        </div>
+      </div>
+      <div class="field"><label>Gaya</label>
+        <div class="toggle-group">
+          <div class="toggle-btn ${el.bold?'on':''}" id="p-bold" style="font-weight:700;">B</div>
+          <div class="toggle-btn ${el.italic?'on':''}" id="p-italic" style="font-style:italic;">I</div>
+        </div>
+      </div>
+      <div class="field"><label>Perataan</label>
+        <div class="toggle-group">
+          <div class="toggle-btn ${el.align==='left'?'on':''}" data-a="left">Kiri</div>
+          <div class="toggle-btn ${el.align==='center'?'on':''}" data-a="center">Tengah</div>
+          <div class="toggle-btn ${el.align==='right'?'on':''}" data-a="right">Kanan</div>
+        </div>
+      </div>
+      <div class="field"><label>Transparansi <span id="p-op-val">${Math.round(el.opacity*100)}%</span></label>
+        <input type="range" id="p-op" min="10" max="100" value="${Math.round(el.opacity*100)}">
+      </div>
+      <button class="danger-btn" id="p-delete">Hapus lapisan ini</button>
+    `;
+    const node = document.getElementById('txt-'+el.id);
+    document.getElementById('p-font').addEventListener('change', e=>{ el.fontFamily=e.target.value; applyStyles(node,el); });
+    document.getElementById('p-size').addEventListener('input', e=>{ el.fontSize=+e.target.value; document.getElementById('p-size-val').textContent=el.fontSize+'px'; applyStyles(node,el); });
+    document.getElementById('p-rot').addEventListener('input', e=>{ el.rotation=+e.target.value; document.getElementById('p-rot-val').textContent=el.rotation+'°'; applyStyles(node,el); });
+    document.getElementById('p-color').addEventListener('input', e=>{ el.color=e.target.value; applyStyles(node,el); renderProps(); });
+    document.querySelectorAll('.swatch').forEach(s=> s.addEventListener('click', ()=>{ el.color=s.dataset.c; applyStyles(node,el); renderProps(); }));
+    document.getElementById('p-bold').addEventListener('click', ()=>{ el.bold=!el.bold; applyStyles(node,el); renderProps(); });
+    document.getElementById('p-italic').addEventListener('click', ()=>{ el.italic=!el.italic; applyStyles(node,el); renderProps(); });
+    document.querySelectorAll('[data-a]').forEach(b=> b.addEventListener('click', ()=>{ el.align=b.dataset.a; applyStyles(node,el); renderProps(); }));
+    document.getElementById('p-op').addEventListener('input', e=>{ el.opacity=(+e.target.value)/100; document.getElementById('p-op-val').textContent=e.target.value+'%'; applyStyles(node,el); });
+    document.getElementById('p-delete').addEventListener('click', ()=> deleteEl(el.id));
   }
 
-  canvas.addEventListener('mousedown', onDown);
-  canvas.addEventListener('mousemove', onMove);
-  window.addEventListener('mouseup', onUp);
-  canvas.addEventListener('touchstart', onDown, {passive:false});
-  canvas.addEventListener('touchmove', onMove, {passive:false});
-  canvas.addEventListener('touchend', onUp);
-
-  function rgbToHex(c){
-    return '#' + c.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
+  function renderLayers(){
+    layerList.innerHTML = textEls.length ? '' : `<p class="empty-props" style="font-size:11.5px;">Belum ada teks ditambahkan.</p>`;
+    textEls.forEach(el=>{
+      const row = document.createElement('div');
+      row.className = 'layer-row' + (el.id===selectedId?' selected':'');
+      row.innerHTML = `<span class="txt">${(el.text||'').replace(/\n/g,' ') || '(kosong)'}</span><span class="del">✕</span>`;
+      row.addEventListener('click', (e)=>{
+        if(e.target.classList.contains('del')){ deleteEl(el.id); return; }
+        selectEl(el.id);
+        document.querySelector('.tool-btn[data-tool="select"]').click();
+      });
+      layerList.appendChild(row);
+    });
   }
 
-  function analyzeBox(box){
-    const x0 = Math.max(0, Math.round(box.x));
-    const y0 = Math.max(0, Math.round(box.y));
-    const w = Math.max(1, Math.round(box.w));
-    const h = Math.max(1, Math.round(box.h));
-    const data = ctx.getImageData(x0, y0, w, h).data;
+  // ---------- Export ----------
+  downloadBtn.addEventListener('click', ()=>{
+    if(!hasImage) return;
+    const out = document.createElement('canvas');
+    out.width = baseCanvas.width; out.height = baseCanvas.height;
+    const octx = out.getContext('2d');
+    octx.drawImage(baseCanvas,0,0);
 
-    const counts = new Map();
-    for(let i=0; i<data.length; i+=4){
-      const r = Math.round(data[i]/12)*12;
-      const g = Math.round(data[i+1]/12)*12;
-      const b = Math.round(data[i+2]/12)*12;
-      const key = r+','+g+','+b;
-      counts.set(key, (counts.get(key)||0)+1);
-    }
-    const sorted = [...counts.entries()].sort((a,b)=>b[1]-a[1]);
-    const bg = sorted[0][0].split(',').map(Number);
+    textEls.forEach(el=>{
+      octx.save();
+      octx.globalAlpha = el.opacity;
+      const weight = el.bold ? '700' : '400';
+      const style = el.italic ? 'italic' : 'normal';
+      octx.font = `${style} ${weight} ${el.fontSize}px '${el.fontFamily}', sans-serif`;
+      octx.fillStyle = el.color;
+      octx.textBaseline = 'top';
+      octx.textAlign = el.align;
 
-    let tColor = null;
-    for(const [key] of sorted.slice(1)){
-      const c = key.split(',').map(Number);
-      const dist = Math.hypot(c[0]-bg[0], c[1]-bg[1], c[2]-bg[2]);
-      if(dist > 45){ tColor = c; break; }
-    }
-    if(!tColor){
-      const lum = 0.299*bg[0]+0.587*bg[1]+0.114*bg[2];
-      tColor = lum > 128 ? [90,90,90] : [225,225,225];
-    }
+      const lines = wrapText(octx, el.text || '', el.w);
+      const lineH = el.fontSize * 1.2;
+      const boxH = lines.length * lineH;
+      const cx = el.x + el.w/2, cy = el.y + boxH/2;
+      octx.translate(cx, cy);
+      octx.rotate(el.rotation * Math.PI/180);
+      octx.translate(-el.w/2, -boxH/2);
 
-    let minCol = w, maxCol = 0, textPixelCount = 0;
-    for(let yy=0; yy<h; yy++){
-      for(let xx=0; xx<w; xx++){
-        const idx = (yy*w+xx)*4;
-        const r = data[idx], g = data[idx+1], b = data[idx+2];
-        const dText = Math.hypot(r-tColor[0], g-tColor[1], b-tColor[2]);
-        const dBg = Math.hypot(r-bg[0], g-bg[1], b-bg[2]);
-        if(dText < dBg && dText < 70){
-          if(xx < minCol) minCol = xx;
-          if(xx > maxCol) maxCol = xx;
-          textPixelCount++;
+      let drawX = 0;
+      if(el.align==='center') drawX = el.w/2;
+      else if(el.align==='right') drawX = el.w;
+
+      lines.forEach((line, i)=>{
+        octx.fillText(line, drawX, i*lineH);
+      });
+      octx.restore();
+    });
+
+    out.toBlob(blob=>{
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'retex-edit.png';
+      a.click();
+    }, 'image/png');
+  });
+
+  function wrapText(ctx, text, maxWidth){
+    const paragraphs = text.split('\n');
+    const lines = [];
+    paragraphs.forEach(p=>{
+      if(p==='' ){ lines.push(''); return; }
+      const words = p.split(' ');
+      let cur = '';
+      words.forEach(w=>{
+        const test = cur ? cur+' '+w : w;
+        if(ctx.measureText(test).width > maxWidth && cur){
+          lines.push(cur);
+          cur = w;
+        } else {
+          cur = test;
         }
-      }
-    }
-
-    let align = 'center';
-    if(textPixelCount > 8){
-      const leftMargin = minCol;
-      const rightMargin = w - maxCol;
-      if(rightMargin < leftMargin * 0.6) align = 'right';
-      else if(leftMargin < rightMargin * 0.6) align = 'left';
-    }
-
-    const density = textPixelCount / (w*h);
-    const bold = density > 0.16;
-
-    return { bg, textColor: tColor, align, bold };
+      });
+      if(cur) lines.push(cur);
+    });
+    return lines;
   }
 
-  function openEditCard(prefillText){
-    editCard.classList.add('show');
-    newTextInput.value = prefillText || '';
-
-    const analysis = analyzeBox(currentBox);
-    bgColor.value = rgbToHex(analysis.bg);
-    textColor.value = rgbToHex(analysis.textColor);
-    alignSel.value = analysis.align;
-    boldChk.checked = analysis.bold;
-
-    fontSize.value = Math.max(8, Math.round(currentBox.h * 0.68));
-    fontSizeVal.textContent = fontSize.value;
-    setTimeout(()=>{ newTextInput.focus(); newTextInput.select(); }, 50);
-    editCard.scrollIntoView({behavior:'smooth', block:'nearest'});
-  }
-
-  fontSize.addEventListener('input', ()=> fontSizeVal.textContent = fontSize.value);
-
-  cancelEdit.addEventListener('click', () => {
-    editCard.classList.remove('show');
-    drawOverlays();
-    currentBox = null;
-  });
-
-  applyEdit.addEventListener('click', () => {
-    if(!currentBox) return;
-    redrawBase();
-    ctx.save();
-    ctx.fillStyle = bgColor.value;
-    ctx.fillRect(currentBox.x, currentBox.y, currentBox.w, currentBox.h);
-
-    const text = newTextInput.value.trim();
-    if(text){
-      let size = parseInt(fontSize.value,10);
-      ctx.fillStyle = textColor.value;
-      ctx.textBaseline = 'middle';
-      const align = alignSel.value;
-      ctx.textAlign = align;
-      const weight = boldChk.checked ? '700' : '500';
-
-      ctx.font = `${weight} ${size}px -apple-system, Roboto, sans-serif`;
-      while(ctx.measureText(text).width > currentBox.w - 4 && size > 6){
-        size -= 1;
-        ctx.font = `${weight} ${size}px -apple-system, Roboto, sans-serif`;
-      }
-
-      let tx;
-      if(align === 'left') tx = currentBox.x + 2;
-      else if(align === 'right') tx = currentBox.x + currentBox.w - 2;
-      else tx = currentBox.x + currentBox.w/2;
-      const ty = currentBox.y + currentBox.h/2;
-
-      ctx.fillText(text, tx, ty);
-    }
-    ctx.restore();
-
-    history.push(ctx.getImageData(0,0,canvas.width,canvas.height));
-    undoBtn.disabled = false;
-
-    // remove this box from detected list since it's already edited
-    detectedBoxes = detectedBoxes.filter(b => b !== currentBox);
-    detectedCount.textContent = detectedBoxes.length ? `${detectedBoxes.length} teks terdeteksi` : '';
-    if(mode === 'auto'){
-      modeHint.innerHTML = detectedBoxes.length
-        ? `Tap salah satu kotak untuk mengganti teksnya. <span class="badge">${detectedBoxes.length} teks terdeteksi</span>`
-        : 'Semua teks yang terdeteksi sudah diedit. Klik "Deteksi ulang" kalau masih ada yang mau diganti.';
-    }
-
-    editCard.classList.remove('show');
-    currentBox = null;
-    step2.classList.remove('active');
-    step3.classList.add('active');
-    drawOverlays();
-  });
-
-  undoBtn.addEventListener('click', () => {
-    if(history.length > 1){
-      history.pop();
-      if(history.length <= 1) undoBtn.disabled = true;
-      drawOverlays();
-    }
-  });
-
-  downloadBtn.addEventListener('click', () => {
-    redrawBase(); // make sure overlays aren't baked into export
-    const link = document.createElement('a');
-    link.download = 'gambar-edit.png';
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-    drawOverlays();
-  });
 })();
 </script>
 </body>

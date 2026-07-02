@@ -110,9 +110,10 @@
     padding:2px; min-width:20px; min-height:1em;
     outline:none; cursor:move; white-space:pre-wrap; word-break:break-word;
     border:1.5px solid transparent; border-radius:2px;
+    background:transparent;
   }
+  .text-el.editing{cursor:text; border-color:var(--accent); background:transparent;}
   .text-el.selected{border-color:var(--accent); box-shadow:0 0 0 3px rgba(95,168,255,.15);}
-  .text-el.editing{cursor:text; border-color:var(--accent);}
   .resize-handle{
     position:absolute; width:11px; height:11px; right:-6px; bottom:-6px;
     background:var(--accent); border:2px solid #0E1116; border-radius:3px; cursor:nwse-resize;
@@ -200,6 +201,11 @@
       Buka Gambar
     </label>
     <input type="file" id="fileInput" accept="image/*">
+    <label class="btn" for="fontInput" title="Unggah file font (.ttf/.otf/.woff) agar teks baru memakai font yang sama seperti aslinya">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V5a1 1 0 0 1 1-1h4M4 17v2a1 1 0 0 0 1 1h4M20 7V5a1 1 0 0 0-1-1h-4M20 17v2a1 1 0 0 1-1 1h-4"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+      Unggah Font
+    </label>
+    <input type="file" id="fontInput" accept=".ttf,.otf,.woff,.woff2">
     <button class="btn" id="resetBtn" disabled>Mulai Ulang</button>
     <button class="btn primary" id="autoBtn" disabled>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3"/></svg>
@@ -287,6 +293,7 @@
 
   const FONTS = ['Inter','Space Grotesk','JetBrains Mono','Georgia','Arial','Impact','Times New Roman'];
   const SWATCH_COLORS = ['#FFFFFF','#111111','#5FA8FF','#E8A33D','#E85D5D','#63D97A','#F2D24B'];
+  let defaultFont = 'Inter';
 
   toolBtns.forEach(b=>{
     b.addEventListener('click', ()=>{
@@ -301,6 +308,27 @@
   // ---------- Load image ----------
   fileInput.addEventListener('change', e=>{
     if(e.target.files && e.target.files[0]) loadImage(e.target.files[0]);
+  });
+
+  const fontInput = document.getElementById('fontInput');
+  fontInput.addEventListener('change', async e=>{
+    const f = e.target.files[0];
+    if(!f) return;
+    try{
+      const buf = await f.arrayBuffer();
+      const fam = 'Kustom-' + f.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9]/g,'').slice(0,24);
+      const face = new FontFace(fam, buf);
+      await face.load();
+      document.fonts.add(face);
+      if(!FONTS.includes(fam)) FONTS.unshift(fam);
+      defaultFont = fam;
+      renderProps();
+      alert(`Font "${f.name}" berhasil dimuat sebagai "${fam}" dan akan otomatis dipakai untuk teks baru / hasil deteksi berikutnya. Lapisan yang sudah ada bisa diganti manual lewat panel kanan.`);
+    }catch(err){
+      console.error(err);
+      alert('Gagal memuat file font. Pastikan formatnya .ttf, .otf, .woff, atau .woff2.');
+    }
+    fontInput.value = '';
   });
   ['dragover','drop'].forEach(ev=>stage.addEventListener(ev, e=>e.preventDefault()));
   stage.addEventListener('drop', e=>{
@@ -403,29 +431,42 @@
     x = Math.max(0,x); y=Math.max(0,y);
     w = Math.min(w, baseCanvas.width-x);
     h = Math.min(h, baseCanvas.height-y);
-    const pad = Math.round(Math.max(w,h)*0.5) + 24;
+    const feather = Math.max(6, Math.round(Math.min(w,h)*0.25));
+    const pad = Math.round(Math.max(w,h)*0.5) + feather + 20;
     const sx = Math.max(0, x-pad), sy = Math.max(0, y-pad);
     const ex = Math.min(baseCanvas.width, x+w+pad), ey = Math.min(baseCanvas.height, y+h+pad);
     const pw = ex-sx, ph = ey-sy;
 
+    // 1) ambil area di sekitar (termasuk padding) sebagai bahan tambalan
     const tmp = document.createElement('canvas'); tmp.width=pw; tmp.height=ph;
     tmp.getContext('2d').drawImage(baseCanvas, sx,sy,pw,ph, 0,0,pw,ph);
 
-    const blurCanvas = document.createElement('canvas'); blurCanvas.width=pw; blurCanvas.height=ph;
-    const bctx = blurCanvas.getContext('2d');
-    bctx.filter = 'blur(22px)';
-    bctx.drawImage(tmp,0,0);
-    const blurCanvas2 = document.createElement('canvas'); blurCanvas2.width=pw; blurCanvas2.height=ph;
-    const bctx2 = blurCanvas2.getContext('2d');
-    bctx2.filter = 'blur(10px)';
-    bctx2.drawImage(blurCanvas,0,0);
+    // 2) haluskan bahan tambalan supaya meniru warna/gradasi sekitar (2 tahap blur)
+    const blurA = document.createElement('canvas'); blurA.width=pw; blurA.height=ph;
+    const actx = blurA.getContext('2d');
+    actx.filter = 'blur(22px)';
+    actx.drawImage(tmp,0,0);
+    const fillCanvas = document.createElement('canvas'); fillCanvas.width=pw; fillCanvas.height=ph;
+    const fctx = fillCanvas.getContext('2d');
+    fctx.filter = 'blur(10px)';
+    fctx.drawImage(blurA,0,0);
 
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x,y,w,h);
-    ctx.clip();
-    ctx.drawImage(blurCanvas2, sx, sy);
-    ctx.restore();
+    // 3) buat masker kotak dengan tepi lembut (feathered), supaya tidak ada garis batas terlihat
+    const mask = document.createElement('canvas'); mask.width=pw; mask.height=ph;
+    const mctx = mask.getContext('2d');
+    mctx.filter = `blur(${feather}px)`;
+    mctx.fillStyle = '#fff';
+    mctx.fillRect(x-sx, y-sy, w, h);
+
+    // 4) terapkan masker ke bahan tambalan (alpha mengikuti masker → tepi menyatu mulus)
+    const patch = document.createElement('canvas'); patch.width=pw; patch.height=ph;
+    const pctx = patch.getContext('2d');
+    pctx.drawImage(fillCanvas,0,0);
+    pctx.globalCompositeOperation = 'destination-in';
+    pctx.drawImage(mask,0,0);
+
+    // 5) gambar tambalan ke kanvas utama — tanpa clip keras, jadi tidak ada "kotak" terlihat
+    ctx.drawImage(patch, sx, sy);
   }
 
   // ---------- Auto-detect teks + analisis gaya (warna/ukuran/tebal/transparansi) ----------
@@ -505,26 +546,53 @@
           if(typeof m.progress==='number') scanBarFill.style.width = Math.round(m.progress*100)+'%';
         }
       });
-      const lines = (data.lines||[]).filter(l=> l.text && l.text.trim().length>0 && l.confidence>35);
+      const lines = (data.lines||[]).filter(l=> l.words && l.words.length && l.text && l.text.trim().length>0);
       if(!lines.length){
         alert('Tidak ada teks yang terdeteksi pada gambar ini. Coba gunakan alat Hapus dan Teks secara manual.');
         return;
       }
-      // Analisis gaya semua baris DULU (sebelum area dihapus, supaya sampling warna akurat)
-      const jobs = lines.map(line=>{
-        const {x0,y0,x1,y1} = line.bbox;
-        const w = x1-x0, h = y1-y0;
-        const style = analyzeRegionStyle(x0,y0,w,h);
-        return { x:x0, y:y0, w, h, text:line.text.trim(), style };
+      // Pisahkan tiap baris menjadi "kolom" berdasarkan jarak antar kata —
+      // jarak yang lebar (seperti antara label dan nilai/nomor di sampingnya)
+      // dianggap batas kolom baru, supaya label & nilai jadi lapisan terpisah
+      // dan bisa diedit sendiri-sendiri tanpa mengganggu yang lain.
+      const rawJobs = [];
+      lines.forEach(line=>{
+        const words = line.words.filter(w=>w.text && w.text.trim().length>0 && w.confidence>25);
+        if(!words.length) return;
+        words.sort((a,b)=> a.bbox.x0-b.bbox.x0);
+        const segments = [[words[0]]];
+        for(let i=1;i<words.length;i++){
+          const cur = words[i];
+          const seg = segments[segments.length-1];
+          const prev = seg[seg.length-1];
+          const gap = cur.bbox.x0 - prev.bbox.x1;
+          const refH = Math.max(prev.bbox.y1-prev.bbox.y0, cur.bbox.y1-cur.bbox.y0, 1);
+          if(gap > refH*0.85){ segments.push([cur]); }
+          else { seg.push(cur); }
+        }
+        segments.forEach(seg=>{
+          const x0 = Math.min(...seg.map(w=>w.bbox.x0));
+          const y0 = Math.min(...seg.map(w=>w.bbox.y0));
+          const x1 = Math.max(...seg.map(w=>w.bbox.x1));
+          const y1 = Math.max(...seg.map(w=>w.bbox.y1));
+          const text = seg.map(w=>w.text).join(' ').trim();
+          if(text) rawJobs.push({ x:x0, y:y0, w:x1-x0, h:y1-y0, text });
+        });
       });
+      if(!rawJobs.length){
+        alert('Tidak ada teks yang terdeteksi pada gambar ini. Coba gunakan alat Hapus dan Teks secara manual.');
+        return;
+      }
+      // Analisis gaya tiap kolom DULU (sebelum area dihapus, supaya sampling warna/ukuran akurat)
+      const jobs = rawJobs.map(j=> ({ ...j, style: analyzeRegionStyle(j.x, j.y, j.w, j.h) }));
       // Baru hapus semua area teks lama
       jobs.forEach(j=> eraseRegion(j.x, j.y, j.w, j.h));
-      // Lalu buat lapisan teks baru yang otomatis meniru komposisi gambar aslinya
+      // Lalu buat lapisan teks baru per kolom, otomatis meniru ukuran, warna & ketebalan aslinya
       let firstId = null;
       jobs.forEach(j=>{
         const el = {
-          id: idCounter++, x: j.x, y: j.y, w: Math.max(j.w+12, 40),
-          text: j.text, fontSize: j.style.fontSize, fontFamily:'Inter',
+          id: idCounter++, x: j.x, y: j.y, w: Math.max(j.w+10, 30),
+          text: j.text, fontSize: j.style.fontSize, fontFamily: defaultFont,
           color: j.style.color, bold: j.style.bold, italic:false,
           align:'left', rotation:0, opacity: j.style.opacity
         };
@@ -559,7 +627,7 @@
   function addTextEl(x,y){
     const el = {
       id: idCounter++, x: Math.round(x), y: Math.round(y), w: 220,
-      text: 'Teks baru', fontSize: 32, fontFamily:'Inter', color:'#FFFFFF',
+      text: 'Teks baru', fontSize: 32, fontFamily: defaultFont, color:'#FFFFFF',
       bold:false, italic:false, align:'left', rotation:0, opacity:1
     };
     textEls.push(el);
